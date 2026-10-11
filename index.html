@@ -121,7 +121,7 @@ section { display: grid; gap: 16px; min-width: 0; }
 /* Bigger poster that follows the cursor (mouse only). */
 .poster-pop {
   position: fixed; left: 0; top: 0; z-index: 20; pointer-events: none;
-  width: 300px; aspect-ratio: 2 / 3; object-fit: cover; border-radius: 6px;
+  width: 420px; aspect-ratio: 2 / 3; object-fit: cover; border-radius: 6px;
   background: var(--sunk); box-shadow: 0 14px 44px rgb(0 0 0 / .5);
   opacity: 0; transform: scale(.96); transition: opacity .12s ease-out, transform .12s ease-out;
 }
@@ -881,10 +881,11 @@ document.body.append(pop);
 const canHover = matchMedia("(hover: hover) and (pointer: fine)");
 let popFor = null;
 // OMDb poster links end in _SX300.jpg; ask for a sharper copy, falling back to the original.
-const bigPoster = url => url.replace(/_SX\d+(?=\.\w+$)/, "_SX600");
+const bigPoster = url => url.replace(/_SX\d+(?=\.\w+$)/, "_SX900");
 pop.addEventListener("error", () => { if (popFor && pop.src !== popFor.src) pop.src = popFor.src; });
 function placePop(x, y) {
-  const h = Math.min(450, innerHeight - 16), w = h * 2 / 3, gap = 18;
+  // As big as 420 × 630, shrunk to fit short windows and to leave room beside the cursor.
+  const h = Math.min(630, innerHeight - 16, (innerWidth * 0.5) * 3 / 2), w = h * 2 / 3, gap = 18;
   pop.style.width = w + "px";
   const left = x + gap + w <= innerWidth - 8 ? x + gap : Math.max(8, x - gap - w);
   const top = Math.min(Math.max(8, y - h / 2), innerHeight - h - 8);
