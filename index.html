@@ -6,6 +6,10 @@
 <title>JBOIZ Movie Club</title>
 <meta name="description" content="The JBOIZ Movie Club: next screening, schedule, ratings and vetoes.">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%23a3243a'/%3E%3Ctext x='16' y='23' font-size='18' text-anchor='middle' fill='%23f2b544' font-family='Arial Black,sans-serif'%3EJ%3C/text%3E%3C/svg%3E">
+<script>
+  // Apply the saved palette before the page paints, so it never flashes the default.
+  try { const p = localStorage.getItem("jboiz-palette"); if (p && p !== "charcoal") document.documentElement.dataset.palette = p; } catch (e) {}
+</script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bungee&family=Archivo:wdth,wght@62..125,400..800&family=DM+Mono:wght@400;500&display=swap">
@@ -13,28 +17,53 @@
 /* Layout: a cinema lobby. Marquee header, a "your turn" bar for the logged-in member, then pinned tabs:
    Next up (ticket, latest takes, vetoes) · Schedule (program, pick order) · Ratings (watched table, grid) · Critics. */
 :root {
-  --bg: #f7ece6;
-  --surface: #fffaf6;
-  --sunk: #f0e0d8;
-  --line: #e1cbc1;
-  --fg: #2a1418;
-  --muted: #7a5b55;
-  --display: #a3243a;
-  --accent: #d48a12;
-  --on-accent: #2a1418;
-  --bulb: #e8a92a;
-  --danger: #b3261e;
+  /* Charcoal: the default palette */
+  --bg: #1c1d20;
+  --surface: #26282c;
+  --sunk: #202124;
+  --line: #3a3c41;
+  --fg: #ecebe8;
+  --muted: #a4a3a0;
+  --display: #f2b544;
+  --accent: #f2b544;
+  --on-accent: #1b1406;
+  --bulb: #f6c45c;
+  --danger: #ff8a7a;
   --font-display: "Bungee", "Impact", "Arial Black", sans-serif;
   --font-body: "Archivo", "Helvetica Neue", Arial, sans-serif;
   --font-data: "DM Mono", ui-monospace, "Cascadia Mono", Consolas, monospace;
-  color-scheme: light;
+  color-scheme: dark;
 }
-@media (prefers-color-scheme: dark) {
-  :root {
-    --bg: #170c0e; --surface: #22131a; --sunk: #1c1014; --line: #3c2329;
-    --fg: #f4e6d8; --muted: #b39a90; --display: #f2b544; --accent: #f2b544;
-    --on-accent: #1e1206; --bulb: #f6c45c; --danger: #ff8a7a; color-scheme: dark;
-  }
+/* Personal palettes, picked in Settings and saved per browser. */
+:root[data-palette="velvet"] {
+  --bg: #170c0e; --surface: #22131a; --sunk: #1c1014; --line: #3c2329;
+  --fg: #f4e6d8; --muted: #b39a90; --display: #f2b544; --accent: #f2b544;
+  --on-accent: #1e1206; --bulb: #f6c45c; --danger: #ff8a7a; color-scheme: dark;
+}
+:root[data-palette="midnight"] {
+  --bg: #0f1626; --surface: #18213a; --sunk: #131b2f; --line: #2a3654;
+  --fg: #e6ebf5; --muted: #9aa6c0; --display: #8cc8ff; --accent: #ffc94d;
+  --on-accent: #1a1405; --bulb: #ffd97a; --danger: #ff8a8a; color-scheme: dark;
+}
+:root[data-palette="noir"] {
+  --bg: #0b0b0b; --surface: #161616; --sunk: #101010; --line: #2e2e2e;
+  --fg: #f2f2f2; --muted: #9c9c9c; --display: #ffffff; --accent: #e6e6e6;
+  --on-accent: #0b0b0b; --bulb: #fff4c2; --danger: #ff6b6b; color-scheme: dark;
+}
+:root[data-palette="drive-in"] {
+  --bg: #0e1f1f; --surface: #152b2b; --sunk: #112424; --line: #24413f;
+  --fg: #e9f3ef; --muted: #93b1aa; --display: #ff7a59; --accent: #ff7a59;
+  --on-accent: #1d0d07; --bulb: #ffd166; --danger: #ff8a7a; color-scheme: dark;
+}
+:root[data-palette="popcorn"] {
+  --bg: #fbf6e9; --surface: #fffdf6; --sunk: #f3ead3; --line: #e3d6b4;
+  --fg: #2b2214; --muted: #786a4f; --display: #c8361d; --accent: #9c6200;
+  --on-accent: #ffffff; --bulb: #e9a21a; --danger: #b3261e; color-scheme: light;
+}
+:root[data-palette="arthouse"] {
+  --bg: #eef0ec; --surface: #fafbf8; --sunk: #e2e6df; --line: #cfd5cb;
+  --fg: #1d241f; --muted: #5f6b62; --display: #2f6b4f; --accent: #9a6418;
+  --on-accent: #ffffff; --bulb: #c9862b; --danger: #b3261e; color-scheme: light;
 }
 
 * { box-sizing: border-box; }
@@ -275,6 +304,17 @@ dialog h3 { margin: 0; font-family: var(--font-display); font-weight: 400; font-
 .dialog-actions .right { display: flex; gap: 8px; margin-left: auto; }
 .form-error { color: var(--danger); font-size: 14px; margin: 0; }
 
+/* Settings */
+.palettes { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 10px; border: 0; margin: 0; padding: 0; }
+.palettes legend { padding: 0; margin-bottom: 8px; }
+.palette { position: relative; display: grid; gap: 6px; padding: 10px; border-radius: 8px; border: 2px solid var(--line); background: var(--bg); cursor: pointer; }
+.palette:has(input:checked) { border-color: var(--accent); }
+.palette:has(input:focus-visible) { outline: 2px solid var(--accent); outline-offset: 2px; }
+.palette input { position: absolute; opacity: 0; pointer-events: none; }
+.palette .sw { display: grid; grid-template-columns: 2fr 1fr 1fr; height: 40px; border-radius: 5px; overflow: hidden; border: 1px solid rgb(127 127 127 / .3); }
+.palette .name { font-weight: 700; font-size: 14px; }
+.palette .note { font-size: 12px; color: var(--muted); }
+
 /* Toast */
 .toast { position: fixed; left: 50%; bottom: calc(20px + env(safe-area-inset-bottom, 0px)); transform: translateX(-50%); background: var(--fg); color: var(--bg); padding: 10px 16px; border-radius: 8px; font-weight: 600; font-size: 14px; max-width: calc(100vw - 32px); z-index: 10; box-shadow: 0 6px 24px rgb(0 0 0 / .25); }
 
@@ -430,6 +470,17 @@ footer { color: var(--muted); font-size: 13px; text-align: center; padding-top: 
         <button type="button" class="btn" data-close>Cancel</button>
         <button type="submit" class="btn primary">Save password</button>
       </div>
+    </div>
+  </form>
+</dialog>
+
+<dialog id="settings" aria-labelledby="settings-h">
+  <form id="settings-form" novalidate>
+    <h3 id="settings-h">Settings</h3>
+    <fieldset class="palettes" id="palettes"></fieldset>
+    <p class="muted" style="margin:0;font-size:13px">Your choice is saved on this device only and doesn't change the site for anyone else.</p>
+    <div class="dialog-actions">
+      <div class="right"><button type="submit" class="btn primary">Done</button></div>
     </div>
   </form>
 </dialog>
@@ -607,13 +658,15 @@ setTab(location.hash.slice(1), { scroll: false });
 
 /* ---------- render ---------- */
 function renderAccount() {
-  $("account").innerHTML = me
+  const settingsBtn = `<button class="link-btn" type="button" id="btn-settings">Settings</button>`;
+  $("account").innerHTML = (me
     ? `<span>Logged in as <span class="me">${esc(me)}</span></span>
        <button class="link-btn" type="button" id="btn-passwd">Change password</button>
        <button class="link-btn" type="button" id="btn-logout">Log out</button>`
     : session
       ? `<span class="muted">This login isn't linked to a club member yet.</span><button class="link-btn" type="button" id="btn-logout">Log out</button>`
-      : `<button class="btn primary small" type="button" id="btn-login">Log in to rate, pick and veto</button>`;
+      : `<button class="btn primary small" type="button" id="btn-login">Log in to rate, pick and veto</button>`) + settingsBtn;
+  $("btn-settings").addEventListener("click", openSettings);
   $("btn-login")?.addEventListener("click", openLogin);
   $("btn-logout")?.addEventListener("click", async () => { await sb.auth.signOut(); toast("Logged out"); });
   $("btn-passwd")?.addEventListener("click", () => { $("passwd-form").reset(); $("passwd-error").hidden = true; openDialog($("passwd")); $("p-new").focus(); });
@@ -873,6 +926,38 @@ function renderMembers({ C, watched }) {
       </dl>
     </article>`).join("");
 }
+
+/* ---------- settings: personal palette ---------- */
+// [id, name, note, swatch colours: background, surface, accent, display]
+const PALETTES = [
+  ["charcoal", "Charcoal", "Default", "#1c1d20", "#26282c", "#f2b544", "#f2b544"],
+  ["velvet", "Velvet", "The original burgundy", "#170c0e", "#22131a", "#f2b544", "#f2b544"],
+  ["midnight", "Midnight", "Navy and gold", "#0f1626", "#18213a", "#ffc94d", "#8cc8ff"],
+  ["noir", "Noir", "Black and white", "#0b0b0b", "#161616", "#e6e6e6", "#ffffff"],
+  ["drive-in", "Drive-in", "Teal and neon orange", "#0e1f1f", "#152b2b", "#ff7a59", "#ff7a59"],
+  ["popcorn", "Popcorn", "Light: butter and red", "#fbf6e9", "#fffdf6", "#9c6200", "#c8361d"],
+  ["arthouse", "Arthouse", "Light: sage and green", "#eef0ec", "#fafbf8", "#9a6418", "#2f6b4f"]
+];
+function currentPalette() { return document.documentElement.dataset.palette || "charcoal"; }
+function applyPalette(id) {
+  if (id === "charcoal") delete document.documentElement.dataset.palette;
+  else document.documentElement.dataset.palette = id;
+  try { localStorage.setItem("jboiz-palette", id); } catch (e) {}
+}
+function openSettings() {
+  const cur = currentPalette();
+  $("palettes").innerHTML = `<legend class="label">Color palette</legend>` + PALETTES.map(([id, name, note, bg, surface, accent, display]) => `
+    <label class="palette">
+      <input type="radio" name="palette" value="${id}"${id === cur ? " checked" : ""}>
+      <span class="sw" aria-hidden="true"><span style="background:${bg}"></span><span style="background:${surface}"></span><span style="background:linear-gradient(${display} 50%, ${accent} 50%)"></span></span>
+      <span class="name">${name}</span>
+      <span class="note">${note}</span>
+    </label>`).join("");
+  openDialog($("settings"));
+  $("palettes").querySelector("input:checked")?.focus();
+}
+$("palettes").addEventListener("change", e => { if (e.target.name === "palette") applyPalette(e.target.value); });
+$("settings-form").addEventListener("submit", e => { e.preventDefault(); closeDialog($("settings")); });
 
 /* ---------- poster preview on hover ---------- */
 const pop = document.createElement("img");
