@@ -1,0 +1,836 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>JBOIZ Movie Club</title>
+<meta name="description" content="The JBOIZ Movie Club: next screening, schedule, ratings and vetoes.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%23a3243a'/%3E%3Ctext x='16' y='23' font-size='18' text-anchor='middle' fill='%23f2b544' font-family='Arial Black,sans-serif'%3EJ%3C/text%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bungee&family=Archivo:wdth,wght@62..125,400..800&family=DM+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: a cinema lobby. Marquee header, a ticket for the next screening, then the program (schedule), the record (watched + ratings grid) and the house rules (pick order, vetoes). */
+:root {
+  --bg: #f7ece6;
+  --surface: #fffaf6;
+  --sunk: #f0e0d8;
+  --line: #e1cbc1;
+  --fg: #2a1418;
+  --muted: #7a5b55;
+  --display: #a3243a;
+  --accent: #d48a12;
+  --on-accent: #2a1418;
+  --bulb: #e8a92a;
+  --danger: #b3261e;
+  --font-display: "Bungee", "Impact", "Arial Black", sans-serif;
+  --font-body: "Archivo", "Helvetica Neue", Arial, sans-serif;
+  --font-data: "DM Mono", ui-monospace, "Cascadia Mono", Consolas, monospace;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #170c0e; --surface: #22131a; --sunk: #1c1014; --line: #3c2329;
+    --fg: #f4e6d8; --muted: #b39a90; --display: #f2b544; --accent: #f2b544;
+    --on-accent: #1e1206; --bulb: #f6c45c; --danger: #ff8a7a; color-scheme: dark;
+  }
+}
+
+* { box-sizing: border-box; }
+html { padding-top: env(safe-area-inset-top, 0px); padding-bottom: env(safe-area-inset-bottom, 0px); }
+body {
+  margin: 0; background: var(--bg); color: var(--fg);
+  font-family: var(--font-body); font-size: 15px; line-height: 1.5;
+}
+[hidden] { display: none !important; }
+.page { max-width: 1080px; margin: 0 auto; padding-inline: 16px; padding-block: 24px 64px; display: grid; gap: 48px; }
+h1, h2 { font-family: var(--font-display); font-weight: 400; color: var(--display); text-wrap: balance; margin: 0; line-height: 1.05; }
+h2 { font-size: clamp(22px, 3.2vw, 28px); }
+.label { font-family: var(--font-body); font-stretch: 75%; font-weight: 700; text-transform: uppercase; letter-spacing: .12em; font-size: 12px; color: var(--muted); }
+.num { font-family: var(--font-data); font-variant-numeric: tabular-nums; }
+a { color: inherit; text-decoration-color: var(--accent); text-underline-offset: 3px; }
+a:focus-visible, button:focus-visible, select:focus-visible, input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+section { display: grid; gap: 16px; min-width: 0; }
+.section-head { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 8px 16px; }
+.section-head p { margin: 0; color: var(--muted); max-width: 60ch; }
+#content { display: grid; gap: 48px; }
+.muted { color: var(--muted); }
+
+/* Buttons */
+.btn { font: inherit; font-weight: 600; font-size: 14px; color: var(--fg); background: var(--surface); border: 1px solid var(--line); border-radius: 6px; padding: 6px 14px; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; text-decoration: none; }
+.btn:hover { background: var(--sunk); }
+.btn.primary { background: var(--accent); color: var(--on-accent); border-color: transparent; }
+.btn.primary:hover { filter: brightness(1.06); }
+.btn.danger { color: var(--danger); }
+.btn.small { padding: 3px 10px; font-size: 13px; }
+.btn[disabled] { opacity: .5; cursor: default; }
+.link-btn { font: inherit; font-size: 13px; color: var(--muted); background: none; border: 0; padding: 0; cursor: pointer; text-decoration: underline; text-decoration-color: var(--line); text-underline-offset: 3px; }
+.link-btn:hover { color: var(--fg); }
+
+/* Marquee */
+.marquee {
+  position: relative; padding: 28px 24px 24px; border-radius: 6px; text-align: center;
+  background: var(--surface); border: 1px solid var(--line);
+  display: grid; gap: 12px; justify-items: center;
+}
+.marquee::before, .marquee::after {
+  content: ""; position: absolute; left: 12px; right: 12px; height: 8px;
+  background: radial-gradient(circle, var(--bulb) 0 3px, transparent 3.5px) 0 0 / 18px 8px repeat-x;
+}
+.marquee::before { top: 8px; }
+.marquee::after { bottom: 8px; }
+.marquee h1 { font-size: clamp(34px, 8vw, 76px); letter-spacing: .02em; }
+.marquee .tagline { display: flex; flex-wrap: wrap; justify-content: center; gap: 4px 18px; color: var(--muted); }
+.marquee .tagline b { color: var(--fg); font-weight: 600; }
+.account { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 8px 14px; margin-top: 4px; font-size: 14px; }
+.account .me { font-weight: 700; }
+
+/* Status */
+.status { padding: 40px 24px; text-align: center; color: var(--muted); border: 1px dashed var(--line); border-radius: 8px; }
+.status strong { display: block; color: var(--fg); font-size: 17px; margin-bottom: 4px; }
+
+/* Ticket */
+.ticket {
+  display: grid; grid-template-columns: minmax(0, 1fr) 210px;
+  background: var(--surface); border: 1px solid var(--line); border-radius: 10px; overflow: hidden;
+}
+.ticket-main { padding: 24px 28px; display: grid; gap: 14px; min-width: 0; }
+.ticket-main .title { font-family: var(--font-display); font-weight: 400; font-size: clamp(30px, 6vw, 52px); line-height: 1; color: var(--fg); margin: 0; text-wrap: balance; overflow-wrap: anywhere; }
+.ticket-main .title.tba { color: var(--muted); }
+.facts { display: flex; flex-wrap: wrap; gap: 6px 22px; margin: 0; }
+.facts div { display: grid; gap: 0; }
+.facts dt { font-stretch: 75%; font-weight: 700; text-transform: uppercase; letter-spacing: .12em; font-size: 11px; color: var(--muted); }
+.facts dd { margin: 0; font-weight: 500; }
+.actions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.stub {
+  position: relative; border-left: 2px dashed var(--line); background: var(--sunk);
+  padding: 24px 20px; display: grid; align-content: center; justify-items: center; gap: 4px; text-align: center;
+}
+.stub::before, .stub::after { content: ""; position: absolute; left: -12px; width: 22px; height: 22px; border-radius: 50%; background: var(--bg); }
+.stub::before { top: -11px; } .stub::after { bottom: -11px; }
+.stub .day { font-family: var(--font-display); font-size: 54px; line-height: 1; color: var(--display); }
+.stub .when { font-weight: 700; font-size: 17px; }
+.stub .countdown { color: var(--muted); }
+.pill { display: inline-flex; align-items: center; gap: 6px; padding: 3px 10px; border-radius: 999px; font-size: 13px; font-weight: 600; border: 1px solid var(--line); background: var(--sunk); }
+.pill.go { background: var(--accent); color: var(--on-accent); border-color: transparent; }
+.pill.warn { color: var(--danger); border-color: currentColor; background: transparent; }
+
+/* Schedule */
+.schedule { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 10px; }
+.slot { display: grid; grid-template-columns: 52px minmax(0, 1fr); gap: 12px; align-items: center; padding: 10px 14px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); }
+.slot .date { text-align: center; line-height: 1.1; }
+.slot .date .m { font-size: 11px; letter-spacing: .12em; text-transform: uppercase; color: var(--muted); font-weight: 700; font-stretch: 75%; }
+.slot .date .d { font-family: var(--font-display); font-size: 24px; color: var(--display); }
+.slot .film { font-weight: 600; overflow-wrap: anywhere; }
+.slot .film.tba { color: var(--muted); font-weight: 500; font-style: italic; }
+.slot .who { font-size: 13px; color: var(--muted); }
+.slot .edit { margin-top: 2px; }
+
+/* Tables */
+.scroll { overflow-x: auto; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); }
+table { border-collapse: collapse; width: 100%; }
+th, td { padding: 9px 12px; text-align: left; border-bottom: 1px solid var(--line); vertical-align: middle; }
+tbody tr:last-child td { border-bottom: 0; }
+thead th { font-stretch: 75%; font-weight: 700; text-transform: uppercase; letter-spacing: .1em; font-size: 12px; color: var(--muted); background: var(--sunk); white-space: nowrap; }
+th button { font: inherit; color: inherit; text-transform: inherit; letter-spacing: inherit; background: none; border: 0; padding: 0; cursor: pointer; display: inline-flex; gap: 4px; align-items: center; }
+th button[aria-sort="ascending"]::after { content: "▲"; font-size: 9px; }
+th button[aria-sort="descending"]::after { content: "▼"; font-size: 9px; }
+th button[aria-sort] { color: var(--fg); }
+.watched td { white-space: nowrap; }
+.watched td.title-cell { font-weight: 600; min-width: 180px; white-space: normal; }
+.watched td.title-cell small { display: block; font-weight: 400; color: var(--muted); font-size: 13px; }
+.rank { color: var(--muted); width: 1%; }
+
+.stars { position: relative; display: inline-block; font-size: 15px; letter-spacing: 1px; line-height: 1; color: var(--line); vertical-align: -1px; }
+.stars span { position: absolute; inset: 0 auto 0 0; overflow: hidden; white-space: nowrap; color: var(--accent); }
+.score { display: inline-flex; align-items: center; gap: 8px; }
+
+/* Rate widget */
+.rate { display: inline-flex; gap: 0; }
+.rate button { font-size: 20px; line-height: 1; background: none; border: 0; padding: 2px 1px; cursor: pointer; color: var(--line); }
+.rate button.on { color: var(--accent); }
+.rate:hover button { color: var(--accent); }
+.rate button:hover ~ button { color: var(--line); }
+
+/* Ratings grid */
+.grid-table th, .grid-table td { text-align: center; padding: 0; border: 1px solid var(--bg); }
+.grid-table thead th { padding: 8px 6px; }
+.grid-table th.film { text-align: left; padding: 6px 12px; font-weight: 600; white-space: nowrap; background: var(--surface); position: sticky; left: 0; z-index: 1; }
+.grid-table td { width: 52px; min-width: 44px; height: 34px; font-family: var(--font-data); font-variant-numeric: tabular-nums; font-size: 14px; }
+.grid-table td.blank { color: var(--muted); opacity: .5; }
+.grid-table td.avg { font-weight: 500; background: var(--sunk); width: 64px; }
+.grid-table th.me-col { color: var(--fg); text-decoration: underline; text-decoration-color: var(--accent); text-underline-offset: 4px; }
+.legend { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 14px; color: var(--muted); font-size: 13px; }
+.legend .chip { display: inline-flex; align-items: center; gap: 6px; }
+.legend i { width: 18px; height: 14px; border-radius: 3px; display: inline-block; }
+
+/* Members */
+.members { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 12px; }
+.member { display: grid; gap: 10px; padding: 16px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); align-content: start; }
+.member header { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+.member .name { font-family: var(--font-display); font-size: 22px; color: var(--fg); }
+.member .avg { font-family: var(--font-data); font-size: 22px; font-weight: 500; }
+.member dl { margin: 0; display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 4px 12px; font-size: 14px; }
+.member dt { color: var(--muted); }
+.member dd { margin: 0; text-align: right; overflow-wrap: anywhere; }
+.bar { height: 6px; border-radius: 3px; background: var(--sunk); overflow: hidden; }
+.bar span { display: block; height: 100%; background: var(--accent); }
+
+/* House rules */
+.rules { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 16px; align-items: start; }
+.rules section { padding: 18px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); gap: 12px; }
+.rules h3 { margin: 0; font-family: var(--font-display); font-weight: 400; font-size: 18px; color: var(--display); }
+.order { margin: 0; padding: 0; list-style: none; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
+.order li { display: grid; justify-items: center; gap: 2px; padding: 8px 4px; border-radius: 6px; background: var(--sunk); }
+.order li.up { background: var(--accent); color: var(--on-accent); }
+.order .n { font-family: var(--font-data); font-size: 12px; opacity: .75; }
+.order .who { font-weight: 700; }
+.veto-list { margin: 0; padding: 0; list-style: none; display: grid; gap: 8px; }
+.veto-list li { display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap; padding-bottom: 8px; border-bottom: 1px solid var(--line); }
+.veto-list li:last-child { border-bottom: 0; padding-bottom: 0; }
+.rules p { margin: 0; color: var(--muted); font-size: 14px; }
+
+/* Dialogs */
+dialog { border: 1px solid var(--line); border-radius: 10px; background: var(--surface); color: var(--fg); padding: 0; width: min(520px, calc(100vw - 32px)); }
+dialog.narrow { width: min(380px, calc(100vw - 32px)); }
+dialog::backdrop { background: rgb(0 0 0 / .45); }
+dialog form { display: grid; gap: 14px; padding: 22px; }
+dialog h3 { margin: 0; font-family: var(--font-display); font-weight: 400; font-size: 22px; color: var(--display); }
+.field { display: grid; gap: 4px; }
+.field label { font-stretch: 75%; font-weight: 700; text-transform: uppercase; letter-spacing: .1em; font-size: 12px; color: var(--muted); }
+.field input, .field select { font: inherit; padding: 8px 10px; border-radius: 6px; border: 1px solid var(--line); background: var(--bg); color: var(--fg); width: 100%; }
+.field .help { font-size: 12px; color: var(--muted); }
+.row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.check { display: flex; gap: 8px; align-items: center; }
+.dialog-actions { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px; }
+.dialog-actions .right { display: flex; gap: 8px; margin-left: auto; }
+.form-error { color: var(--danger); font-size: 14px; margin: 0; }
+
+/* Toast */
+.toast { position: fixed; left: 50%; bottom: calc(20px + env(safe-area-inset-bottom, 0px)); transform: translateX(-50%); background: var(--fg); color: var(--bg); padding: 10px 16px; border-radius: 8px; font-weight: 600; font-size: 14px; max-width: calc(100vw - 32px); z-index: 10; box-shadow: 0 6px 24px rgb(0 0 0 / .25); }
+
+footer { color: var(--muted); font-size: 13px; text-align: center; }
+
+@media (max-width: 640px) {
+  .ticket { grid-template-columns: 1fr; }
+  .stub { border-left: 0; border-top: 2px dashed var(--line); grid-auto-flow: column; justify-content: space-between; align-items: center; text-align: left; justify-items: start; }
+  .stub::before { top: -12px; left: -11px; } .stub::after { top: -12px; bottom: auto; left: auto; right: -11px; }
+  .stub .day { font-size: 40px; }
+  .ticket-main { padding: 20px; }
+  .row2 { grid-template-columns: 1fr; }
+}
+</style>
+</head>
+<body>
+<main class="page">
+  <header class="marquee">
+    <span class="label">Now showing at</span>
+    <h1>JBOIZ Movie Club</h1>
+    <div class="tagline" id="tagline"></div>
+    <div class="account" id="account"></div>
+  </header>
+
+  <div class="status" id="status"><strong>Loading the club's schedule…</strong>Screenings, ratings and vetoes are on their way.</div>
+
+  <div id="content" hidden>
+    <section aria-labelledby="next-h">
+      <div class="section-head"><h2 id="next-h">Next screening</h2></div>
+      <article class="ticket" id="ticket"></article>
+    </section>
+
+    <section aria-labelledby="sched-h">
+      <div class="section-head">
+        <h2 id="sched-h">Coming up</h2>
+        <p>Two screenings a week. Picks rotate in the pick order below. Log in to fill in your film.</p>
+      </div>
+      <ul class="schedule" id="schedule"></ul>
+      <button class="btn" id="sched-toggle" type="button" style="justify-self:start"></button>
+    </section>
+
+    <section aria-labelledby="watched-h">
+      <div class="section-head">
+        <h2 id="watched-h">Already watched</h2>
+        <p id="watched-sub"></p>
+      </div>
+      <div class="scroll">
+        <table class="watched">
+          <thead><tr>
+            <th class="rank">#</th>
+            <th><button type="button" data-sort="title">Film</button></th>
+            <th><button type="button" data-sort="avg">Club rating</button></th>
+            <th id="yours-h">Your rating</th>
+            <th><button type="button" data-sort="date">Watched</button></th>
+            <th><button type="button" data-sort="picker">Picked by</button></th>
+            <th><button type="button" data-sort="runtime">Runtime</button></th>
+            <th>Genre</th>
+            <th>Link</th>
+          </tr></thead>
+          <tbody id="watched-body"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <section aria-labelledby="grid-h">
+      <div class="section-head">
+        <h2 id="grid-h">Every rating</h2>
+        <div class="legend" id="legend"></div>
+      </div>
+      <div class="scroll"><table class="grid-table" id="grid"></table></div>
+    </section>
+
+    <section aria-labelledby="mem-h">
+      <div class="section-head">
+        <h2 id="mem-h">The critics</h2>
+        <p>Averages count only the films each person rated.</p>
+      </div>
+      <div class="members" id="members"></div>
+    </section>
+
+    <div class="rules">
+      <section aria-labelledby="order-h">
+        <h3 id="order-h">Pick order</h3>
+        <ol class="order" id="order"></ol>
+        <p id="order-note"></p>
+      </section>
+      <section aria-labelledby="veto-h">
+        <h3 id="veto-h">Veto log</h3>
+        <ul class="veto-list" id="vetoes"></ul>
+        <p>Any member can veto the next movie from its ticket above.</p>
+      </section>
+    </div>
+  </div>
+
+  <footer>Anyone with the link can look. Log in to rate, pick and veto.</footer>
+</main>
+
+<dialog id="login" class="narrow" aria-labelledby="login-h">
+  <form id="login-form" novalidate>
+    <h3 id="login-h">Log in</h3>
+    <div class="field">
+      <label for="l-name">Name</label>
+      <select id="l-name" autocomplete="username"></select>
+    </div>
+    <div class="field">
+      <label for="l-pass">Password</label>
+      <input id="l-pass" type="password" autocomplete="current-password">
+    </div>
+    <p class="form-error" id="login-error" hidden></p>
+    <div class="dialog-actions">
+      <span class="muted" style="font-size:13px;align-self:center">Forgot it? Ask the club admin.</span>
+      <div class="right">
+        <button type="button" class="btn" data-close>Cancel</button>
+        <button type="submit" class="btn primary" id="login-go">Log in</button>
+      </div>
+    </div>
+  </form>
+</dialog>
+
+<dialog id="passwd" class="narrow" aria-labelledby="passwd-h">
+  <form id="passwd-form" novalidate>
+    <h3 id="passwd-h">Change password</h3>
+    <div class="field">
+      <label for="p-new">New password</label>
+      <input id="p-new" type="password" autocomplete="new-password" minlength="8">
+      <span class="help">At least 8 characters.</span>
+    </div>
+    <div class="field">
+      <label for="p-again">Type it again</label>
+      <input id="p-again" type="password" autocomplete="new-password">
+    </div>
+    <p class="form-error" id="passwd-error" hidden></p>
+    <div class="dialog-actions">
+      <div class="right">
+        <button type="button" class="btn" data-close>Cancel</button>
+        <button type="submit" class="btn primary">Save password</button>
+      </div>
+    </div>
+  </form>
+</dialog>
+
+<dialog id="editor" aria-labelledby="editor-h">
+  <form id="editor-form" novalidate>
+    <h3 id="editor-h">Edit screening</h3>
+    <p class="muted" id="editor-when" style="margin:0"></p>
+    <div class="field">
+      <label for="f-title">Film title</label>
+      <input id="f-title" autocomplete="off" maxlength="120">
+    </div>
+    <div class="row2">
+      <div class="field"><label for="f-director">Director</label><input id="f-director" autocomplete="off" maxlength="120"></div>
+      <div class="field"><label for="f-genre">Genre</label><input id="f-genre" autocomplete="off" maxlength="120" placeholder="Horror, Thriller"></div>
+    </div>
+    <div class="row2">
+      <div class="field"><label for="f-mins">Runtime (minutes)</label><input id="f-mins" type="number" min="1" max="100000" inputmode="numeric"></div>
+      <div class="field"><label for="f-picker">Picked by</label><input id="f-picker" list="picker-list" autocomplete="off" maxlength="60"></div>
+    </div>
+    <datalist id="picker-list"></datalist>
+    <div class="field">
+      <label for="f-imdb">IMDb link</label>
+      <input id="f-imdb" autocomplete="off" placeholder="https://www.imdb.com/title/tt0118694/">
+      <span class="help">Paste the film's IMDb page link.</span>
+    </div>
+    <label class="check"><input type="checkbox" id="f-watched"> We've watched it</label>
+    <p class="form-error" id="editor-error" hidden></p>
+    <div class="dialog-actions">
+      <button type="button" class="btn danger" id="editor-clear">Clear film</button>
+      <div class="right">
+        <button type="button" class="btn" data-close>Cancel</button>
+        <button type="submit" class="btn primary">Save</button>
+      </div>
+    </div>
+  </form>
+</dialog>
+
+<div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
+
+<script src="config.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
+<script>
+const CFG = window.MOVIE_CLUB || {};
+
+/* ---------- helpers ---------- */
+const $ = id => document.getElementById(id);
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+// Screening dates are calendar days ("2026-10-16"); keep them in UTC so they never shift a day.
+const dayNum = iso => Date.UTC(+iso.slice(0, 4), +iso.slice(5, 7) - 1, +iso.slice(8, 10)) / 864e5;
+const fmt = (iso, opts) => new Date(dayNum(iso) * 864e5).toLocaleDateString("en-US", { timeZone: "UTC", ...opts });
+const fmtTs = (ts, opts) => new Date(ts).toLocaleDateString("en-US", opts);
+const today = (() => { const n = new Date(); return Date.UTC(n.getFullYear(), n.getMonth(), n.getDate()) / 864e5; })();
+const mean = a => a.length ? a.reduce((x, y) => x + y, 0) / a.length : null;
+const runtime = m => !m ? "" : m >= 600 ? `${Math.round(m / 60).toLocaleString()} hr` : `${m} min`;
+const imdbUrl = id => `https://www.imdb.com/title/${id}/`;
+const stars = v => `<span class="stars" role="img" aria-label="${v.toFixed(1)} out of 5">★★★★★<span style="width:${(v / 5) * 100}%" aria-hidden="true">★★★★★</span></span>`;
+const plural = (n, w) => `${n} ${w}${n === 1 ? "" : "s"}`;
+
+let toastTimer;
+function toast(msg) {
+  const t = $("toast"); t.textContent = msg; t.hidden = false;
+  clearTimeout(toastTimer); toastTimer = setTimeout(() => { t.hidden = true; }, 3400);
+}
+function showStatus(title, body) {
+  $("status").hidden = false; $("content").hidden = true;
+  $("status").innerHTML = `<strong>${esc(title)}</strong>${esc(body)}`;
+}
+function openDialog(d) { d.showModal ? d.showModal() : d.setAttribute("open", ""); }
+function closeDialog(d) { d.close ? d.close() : d.removeAttribute("open"); }
+document.querySelectorAll("dialog [data-close]").forEach(b => b.addEventListener("click", () => closeDialog(b.closest("dialog"))));
+
+/* ---------- state ---------- */
+let sb = null;
+let members = [];   // [{name, pick_order}]
+let slots = null;   // [{date, title, director, genre, mins, imdb, picker, watched, ratings: {name: score}}]
+let vetoes = [];    // [{id, slot, member, created_at}]
+let me = null;      // logged-in member's name, or null
+let session = null;
+let showAll = false;
+let sortKey = "date", sortDir = 1;
+
+const critics = () => members.map(m => m.name);
+const pickOrder = () => members.filter(m => m.pick_order != null).sort((a, b) => a.pick_order - b.pick_order).map(m => m.name);
+
+/* ---------- data ---------- */
+async function load() {
+  const [m, s, r, v] = await Promise.all([
+    sb.from("members").select("name, pick_order").order("pick_order", { nullsFirst: false }),
+    sb.from("slots").select("*").order("date"),
+    sb.from("ratings").select("slot, member, score"),
+    sb.from("vetoes").select("id, slot, member, created_at")
+  ]);
+  const err = m.error || s.error || r.error || v.error;
+  if (err) throw err;
+  members = m.data;
+  const byDate = new Map(s.data.map(x => [x.date, { ...x, ratings: {} }]));
+  r.data.forEach(x => { const sl = byDate.get(x.slot); if (sl) sl.ratings[x.member] = x.score; });
+  slots = [...byDate.values()];
+  vetoes = v.data;
+}
+let reloadTimer;
+function scheduleReload() {
+  clearTimeout(reloadTimer);
+  reloadTimer = setTimeout(() => load().then(render).catch(() => {}), 250);
+}
+
+// Run a write, then refresh. Explains refusals in plain words.
+async function write(op, okMsg) {
+  if (!me) { openLogin(); return false; }
+  const { error } = await op();
+  if (error) {
+    if (error.code === "42501" || /row-level security/i.test(error.message)) toast("That change isn't allowed for your account.");
+    else if (/JWT|session/i.test(error.message)) { toast("Your login expired. Log in again."); openLogin(); }
+    else toast("That change didn't save. Check your connection and try again.");
+    scheduleReload();
+    return false;
+  }
+  if (okMsg) toast(okMsg);
+  scheduleReload();
+  return true;
+}
+
+/* ---------- derived ---------- */
+function derive() {
+  const C = critics();
+  const ordered = [...slots].sort((a, b) => a.date.localeCompare(b.date));
+  const watched = ordered.filter(s => s.watched && s.title).map(s => {
+    const vals = C.map(c => s.ratings[c] || 0);
+    return { ...s, vals, avg: mean(vals.filter(v => v > 0)) };
+  });
+  const upcoming = ordered.filter(s => !s.watched);
+  return { C, ordered, watched, upcoming, next: upcoming[0] || null };
+}
+
+/* ---------- render ---------- */
+function renderAccount() {
+  $("account").innerHTML = me
+    ? `<span>Logged in as <span class="me">${esc(me)}</span></span>
+       <button class="link-btn" type="button" id="btn-passwd">Change password</button>
+       <button class="link-btn" type="button" id="btn-logout">Log out</button>`
+    : session
+      ? `<span class="muted">This login isn't linked to a club member yet.</span><button class="link-btn" type="button" id="btn-logout">Log out</button>`
+      : `<button class="btn primary small" type="button" id="btn-login">Log in to rate, pick and veto</button>`;
+  $("btn-login")?.addEventListener("click", openLogin);
+  $("btn-logout")?.addEventListener("click", async () => { await sb.auth.signOut(); toast("Logged out"); });
+  $("btn-passwd")?.addEventListener("click", () => { $("passwd-form").reset(); $("passwd-error").hidden = true; openDialog($("passwd")); $("p-new").focus(); });
+}
+
+function render() {
+  renderAccount();
+  if (!slots) return;
+  if (!slots.length) return showStatus("No screenings on the calendar yet.", "Once the club's schedule is added it shows up here.");
+  $("status").hidden = true; $("content").hidden = false;
+  const D = derive();
+  renderTagline(D); renderTicket(D); renderSchedule(D); renderWatched(D); renderGrid(D); renderMembers(D); renderRules(D);
+}
+
+function renderTagline({ ordered, watched }) {
+  const totalMins = watched.reduce((s, f) => s + (f.mins || 0), 0);
+  const clubAvg = mean(watched.filter(f => f.avg != null).map(f => f.avg));
+  $("tagline").innerHTML = [
+    `<span><b>${pickOrder().length}</b> members</span>`,
+    `<span><b>${watched.length}</b> films watched</span>`,
+    `<span><b class="num">${Math.floor(totalMins / 60)}h ${totalMins % 60}m</b> of screen time</span>`,
+    clubAvg != null ? `<span>Club average <b class="num">${clubAvg.toFixed(2)}</b></span>` : "",
+    `<span>Since ${fmt(ordered[0].date, { month: "short", day: "numeric", year: "numeric" })}</span>`
+  ].join("");
+}
+
+function renderTicket({ next }) {
+  if (!next) { $("ticket").innerHTML = `<div class="ticket-main"><p class="muted">Every date on the calendar has been watched.</p></div>`; return; }
+  const diff = dayNum(next.date) - today;
+  const countdown = diff === 0 ? "Tonight" : diff === 1 ? "Tomorrow" : diff > 1 ? `In ${diff} days` : `Scheduled ${plural(-diff, "day")} ago`;
+  const nv = vetoes.filter(v => v.slot === next.date);
+  const named = nv.filter(v => v.member).map(v => v.member);
+  const mine = me && named.includes(me);
+  const vetoPill = nv.length
+    ? `<span class="pill warn">${plural(nv.length, "veto")}${named.length ? ` · ${esc(named.join(", "))}` : ""}</span>`
+    : `<span class="pill go">No vetoes · it's on</span>`;
+  const editLabel = next.title ? "Edit" : "Add the film";
+  $("ticket").innerHTML = `
+    <div class="ticket-main">
+      <span class="label">Admit the JBOIZ</span>
+      ${next.title
+        ? `<h3 class="title">${esc(next.title)}</h3>
+           <dl class="facts">
+             ${next.director ? `<div><dt>Director</dt><dd>${esc(next.director)}</dd></div>` : ""}
+             ${next.genre ? `<div><dt>Genre</dt><dd>${esc(next.genre)}</dd></div>` : ""}
+             ${next.mins ? `<div><dt>Runtime</dt><dd class="num">${runtime(next.mins)}</dd></div>` : ""}
+             <div><dt>Picked by</dt><dd>${esc(next.picker)}</dd></div>
+           </dl>`
+        : `<h3 class="title tba">Pick not in yet</h3><p class="muted" style="margin:0">It's ${esc(next.picker)}'s turn to choose.</p>`}
+      <div class="actions">
+        ${next.imdb ? `<a class="btn primary" href="${imdbUrl(esc(next.imdb))}" target="_blank" rel="noopener">View on IMDb ↗</a>` : ""}
+        ${vetoPill}
+      </div>
+      ${me ? `<div class="actions">
+        ${next.title ? `<button class="btn small" type="button" data-act="veto" data-id="${next.date}">${mine ? "Withdraw my veto" : "Veto this movie"}</button>` : ""}
+        ${next.title ? `<button class="btn small" type="button" data-act="watched" data-id="${next.date}">Mark as watched</button>` : ""}
+        <button class="btn small" type="button" data-act="edit" data-id="${next.date}">${editLabel}</button>
+      </div>` : ""}
+    </div>
+    <div class="stub">
+      <span class="label">${fmt(next.date, { weekday: "long" })}</span>
+      <span class="day">${fmt(next.date, { day: "numeric" })}</span>
+      <span class="when">${fmt(next.date, { month: "long", year: "numeric" })}</span>
+      <span class="countdown">${countdown}</span>
+    </div>`;
+}
+
+const SHOWN = 12;
+function renderSchedule({ upcoming }) {
+  const later = upcoming.slice(1);
+  const list = showAll ? later : later.slice(0, SHOWN);
+  $("schedule").innerHTML = list.map(f => `
+    <li class="slot">
+      <div class="date"><div class="m">${fmt(f.date, { month: "short" })}</div><div class="d">${fmt(f.date, { day: "numeric" })}</div></div>
+      <div>
+        ${f.title
+          ? `<div class="film">${f.imdb ? `<a href="${imdbUrl(esc(f.imdb))}" target="_blank" rel="noopener">${esc(f.title)}</a>` : esc(f.title)}</div>`
+          : `<div class="film tba">Pick not in yet</div>`}
+        <div class="who">${fmt(f.date, { weekday: "short" })} · ${esc(f.picker)}'s pick${f.mins ? ` · <span class="num">${runtime(f.mins)}</span>` : ""}</div>
+        ${me ? `<button class="link-btn edit" type="button" data-act="edit" data-id="${f.date}">${f.title ? "Edit" : "Add film"}</button>` : ""}
+      </div>
+    </li>`).join("");
+  const tog = $("sched-toggle");
+  tog.hidden = later.length <= SHOWN;
+  if (later.length) tog.textContent = showAll ? "Show fewer dates" : `Show all ${later.length} dates through ${fmt(later[later.length - 1].date, { month: "short", year: "numeric" })}`;
+}
+
+const sorters = {
+  date: (a, b) => a.date.localeCompare(b.date),
+  avg: (a, b) => (a.avg ?? -1) - (b.avg ?? -1),
+  title: (a, b) => a.title.localeCompare(b.title),
+  picker: (a, b) => (a.picker || "").localeCompare(b.picker || "") || a.date.localeCompare(b.date),
+  runtime: (a, b) => (a.mins || 0) - (b.mins || 0)
+};
+function renderWatched({ C, watched }) {
+  const rated = watched.filter(f => f.avg != null);
+  if (rated.length) {
+    const best = rated.reduce((a, b) => (b.avg > a.avg ? b : a));
+    const worst = rated.reduce((a, b) => (b.avg < a.avg ? b : a));
+    $("watched-sub").textContent = `Top rated so far: ${best.title} (${best.avg.toFixed(1)}). Bottom: ${worst.title} (${worst.avg.toFixed(1)}).`;
+  } else $("watched-sub").textContent = "";
+  $("yours-h").hidden = !me;
+  const mi = C.indexOf(me);
+  const rows = [...watched].sort((a, b) => sorters[sortKey](a, b) * sortDir);
+  $("watched-body").innerHTML = rows.map((f, i) => {
+    const mine = mi >= 0 ? f.vals[mi] : 0;
+    const rate = `<td><span class="rate" role="group" aria-label="Your rating for ${esc(f.title)}">${[1, 2, 3, 4, 5].map(n =>
+      `<button type="button" class="${n <= mine ? "on" : ""}" data-act="rate" data-id="${f.date}" data-v="${n}" aria-label="${n} star${n > 1 ? "s" : ""}" aria-pressed="${n === mine}">★</button>`).join("")}</span></td>`;
+    return `
+    <tr>
+      <td class="rank num">${i + 1}</td>
+      <td class="title-cell">${esc(f.title)}${f.director ? `<small>${esc(f.director)}</small>` : ""}</td>
+      <td>${f.avg != null ? `<span class="score">${stars(f.avg)}<span class="num">${f.avg.toFixed(1)}</span></span>` : `<span class="muted">No ratings yet</span>`}</td>
+      ${me ? rate : ""}
+      <td class="num">${fmt(f.date, { month: "short", day: "numeric" })}</td>
+      <td>${esc(f.picker)}</td>
+      <td class="num">${runtime(f.mins)}</td>
+      <td>${esc(f.genre)}</td>
+      <td>${f.imdb ? `<a href="${imdbUrl(esc(f.imdb))}" target="_blank" rel="noopener">IMDb</a>` : ""}</td>
+    </tr>`;
+  }).join("");
+  document.querySelectorAll("th button[data-sort]").forEach(b => {
+    if (b.dataset.sort === sortKey) b.setAttribute("aria-sort", sortDir === 1 ? "ascending" : "descending");
+    else b.removeAttribute("aria-sort");
+  });
+}
+
+const shade = v => `background: color-mix(in oklab, var(--accent) ${12 + (v - 1) * 20}%, var(--surface)); color: ${v >= 4 ? "var(--on-accent)" : "var(--fg)"}`;
+function renderGrid({ C, watched }) {
+  $("legend").innerHTML = [1, 2, 3, 4, 5].map(v => `<span class="chip"><i style="${shade(v)}"></i>${v}</span>`).join("") + `<span class="chip">· = didn't rate</span>`;
+  $("grid").innerHTML = `
+    <thead><tr><th class="film">Film</th>${C.map(c => `<th class="${c === me ? "me-col" : ""}">${esc(c)}</th>`).join("")}<th>Avg</th></tr></thead>
+    <tbody>${watched.map(f => `
+      <tr><th class="film" scope="row">${esc(f.title)}</th>
+        ${f.vals.map(v => v ? `<td style="${shade(v)}">${v}</td>` : `<td class="blank" aria-label="not rated">·</td>`).join("")}
+        <td class="avg">${f.avg != null ? f.avg.toFixed(1) : "–"}</td></tr>`).join("")}
+    </tbody>`;
+}
+
+function renderMembers({ C, watched }) {
+  const listTitles = arr => arr.length > 2 ? `${esc(arr[0])} +${arr.length - 1} more` : arr.map(esc).join(", ");
+  const cards = C.map((name, ci) => {
+    const rated = watched.filter(f => f.vals[ci] > 0).map(f => ({ f, v: f.vals[ci] }));
+    if (!rated.length) return { name, avg: null };
+    const top = Math.max(...rated.map(r => r.v)), low = Math.min(...rated.map(r => r.v));
+    return {
+      name, count: rated.length, avg: mean(rated.map(r => r.v)), top, low,
+      favs: rated.filter(r => r.v === top).map(r => r.f.title),
+      lows: rated.filter(r => r.v === low).map(r => r.f.title),
+      delta: mean(rated.map(r => r.v - r.f.avg))
+    };
+  }).sort((a, b) => (b.avg ?? -1) - (a.avg ?? -1));
+  $("members").innerHTML = cards.map(c => c.avg == null ? `
+    <article class="member"><header><span class="name">${esc(c.name)}</span><span class="avg muted">–</span></header>
+      <p class="muted" style="margin:0">No ratings yet.</p></article>` : `
+    <article class="member">
+      <header><span class="name">${esc(c.name)}</span><span class="avg">${c.avg.toFixed(2)}</span></header>
+      <div class="bar" aria-hidden="true"><span style="width:${(c.avg / 5) * 100}%"></span></div>
+      <dl>
+        <dt>Films rated</dt><dd class="num">${c.count} of ${watched.length}</dd>
+        <dt>vs. the room</dt><dd class="num">${c.delta >= 0 ? "+" : "−"}${Math.abs(c.delta).toFixed(2)} ${c.delta >= 0.05 ? "kinder" : c.delta <= -0.05 ? "harsher" : "in step"}</dd>
+        <dt>Top (${c.top}★)</dt><dd>${listTitles(c.favs)}</dd>
+        <dt>Low (${c.low}★)</dt><dd>${listTitles(c.lows)}</dd>
+      </dl>
+    </article>`).join("");
+}
+
+function renderRules({ next }) {
+  const order = pickOrder();
+  const up = next ? next.picker : "";
+  $("order").innerHTML = order.map((m, i) => `<li class="${m === up ? "up" : ""}"><span class="n">${i + 1}</span><span class="who">${esc(m)}</span></li>`).join("");
+  const guests = critics().filter(c => !order.includes(c));
+  $("order-note").textContent = next
+    ? `${next.picker} has the current pick.${guests.length ? ` ${guests.join(", ")} ${guests.length > 1 ? "rate as guests and aren't" : "rates as a guest and isn't"} in the rotation.` : ""}`
+    : "";
+  const titleOf = d => (slots.find(s => s.date === d) || {}).title || fmt(d, { month: "short", day: "numeric" });
+  const sorted = [...vetoes].sort((a, b) => b.created_at.localeCompare(a.created_at));
+  $("vetoes").innerHTML = sorted.length
+    ? sorted.map(v => `<li><span>${esc(titleOf(v.slot))}${v.member ? ` <span class="muted">· ${esc(v.member)}</span>` : ""}</span><span class="num muted">${fmtTs(v.created_at, { month: "short", day: "numeric" })}</span></li>`).join("")
+    : `<li class="muted">No vetoes yet.</li>`;
+}
+
+/* ---------- interactions ---------- */
+$("sched-toggle").addEventListener("click", () => { showAll = !showAll; render(); });
+document.querySelectorAll("th button[data-sort]").forEach(b => b.addEventListener("click", () => {
+  const k = b.dataset.sort;
+  if (k === sortKey) sortDir = -sortDir;
+  else { sortKey = k; sortDir = (k === "avg" || k === "runtime") ? -1 : 1; }
+  render();
+}));
+
+document.addEventListener("click", e => {
+  const b = e.target.closest("[data-act]");
+  if (!b || !slots) return;
+  const slot = slots.find(s => s.date === b.dataset.id);
+  if (!slot) return;
+  const act = b.dataset.act;
+  if (act === "edit") return me ? openEditor(slot) : openLogin();
+  if (act === "rate") {
+    const v = +b.dataset.v;
+    const nv = slot.ratings[me] === v ? 0 : v; // tap your current rating again to clear it
+    write(() => nv
+      ? sb.from("ratings").upsert({ slot: slot.date, member: me, score: nv, updated_at: new Date().toISOString() })
+      : sb.from("ratings").delete().eq("slot", slot.date).eq("member", me),
+      nv ? `Rated ${slot.title} ${nv}★` : `Cleared your rating for ${slot.title}`);
+    return;
+  }
+  if (act === "veto") {
+    const mine = vetoes.some(v => v.slot === slot.date && v.member === me);
+    write(() => mine
+      ? sb.from("vetoes").delete().eq("slot", slot.date).eq("member", me)
+      : sb.from("vetoes").insert({ slot: slot.date, member: me }),
+      mine ? "Veto withdrawn" : `Vetoed ${slot.title}`);
+    return;
+  }
+  if (act === "watched") {
+    write(() => sb.from("slots").update({ watched: true }).eq("date", slot.date),
+      `${slot.title} moved to Already watched. Rate it below.`);
+  }
+});
+
+/* ---------- login ---------- */
+function openLogin() {
+  $("l-name").innerHTML = `<option value="">Pick your name</option>` + critics().map(c => `<option>${esc(c)}</option>`).join("");
+  $("l-pass").value = "";
+  $("login-error").hidden = true;
+  openDialog($("login"));
+  $("l-name").focus();
+}
+$("login-form").addEventListener("submit", async e => {
+  e.preventDefault();
+  const name = $("l-name").value, password = $("l-pass").value;
+  const err = $("login-error");
+  if (!name) { err.textContent = "Pick your name."; err.hidden = false; return; }
+  if (!password) { err.textContent = "Enter your password."; err.hidden = false; return; }
+  $("login-go").disabled = true;
+  const { error } = await sb.auth.signInWithPassword({ email: `${name.toLowerCase()}@${CFG.emailDomain}`, password });
+  $("login-go").disabled = false;
+  if (error) {
+    err.textContent = /invalid/i.test(error.message) ? "That name and password don't match. Check the password, or ask the club admin to reset it." : "Couldn't log in right now. Try again in a moment.";
+    err.hidden = false;
+    return;
+  }
+  closeDialog($("login"));
+  toast(`Welcome back, ${name}`);
+});
+
+$("passwd-form").addEventListener("submit", async e => {
+  e.preventDefault();
+  const a = $("p-new").value, b = $("p-again").value, err = $("passwd-error");
+  if (a.length < 8) { err.textContent = "Use at least 8 characters."; err.hidden = false; return; }
+  if (a !== b) { err.textContent = "The two passwords don't match."; err.hidden = false; return; }
+  const { error } = await sb.auth.updateUser({ password: a });
+  if (error) { err.textContent = error.message || "Couldn't change the password. Try again."; err.hidden = false; return; }
+  closeDialog($("passwd"));
+  toast("Password changed");
+});
+
+async function setSession(s) {
+  session = s;
+  me = null;
+  if (s) {
+    const { data } = await sb.from("members").select("name").eq("user_id", s.user.id).maybeSingle();
+    me = data ? data.name : null;
+  }
+  render();
+}
+
+/* ---------- editor ---------- */
+let editing = null;
+const dlg = $("editor");
+function openEditor(slot) {
+  editing = slot;
+  $("picker-list").innerHTML = pickOrder().map(p => `<option value="${esc(p)}">`).join("");
+  $("editor-h").textContent = slot.title ? "Edit screening" : "Add the film";
+  $("editor-when").textContent = `${fmt(slot.date, { weekday: "long", month: "long", day: "numeric", year: "numeric" })} · ${slot.picker}'s pick`;
+  $("f-title").value = slot.title || "";
+  $("f-director").value = slot.director || "";
+  $("f-genre").value = slot.genre || "";
+  $("f-mins").value = slot.mins || "";
+  $("f-picker").value = slot.picker || "";
+  $("f-imdb").value = slot.imdb ? imdbUrl(slot.imdb) : "";
+  $("f-watched").checked = !!slot.watched;
+  $("editor-clear").hidden = !slot.title;
+  $("editor-error").hidden = true;
+  openDialog(dlg);
+  $("f-title").focus();
+}
+function formError(msg) { const el = $("editor-error"); el.textContent = msg; el.hidden = false; }
+$("editor-form").addEventListener("submit", e => {
+  e.preventDefault();
+  if (!editing) return;
+  const title = $("f-title").value.trim();
+  const imdbRaw = $("f-imdb").value.trim();
+  const m = imdbRaw.match(/tt\d{5,10}/);
+  if (imdbRaw && !m) return formError("That IMDb link doesn't look right. It should contain an id like tt0118694.");
+  const minsRaw = $("f-mins").value.trim();
+  const mins = minsRaw ? Math.round(+minsRaw) : null;
+  if (minsRaw && !(mins > 0)) return formError("Runtime should be a number of minutes, like 112.");
+  const picker = $("f-picker").value.trim();
+  if (!picker) return formError("Add who picked this one.");
+  const watched = $("f-watched").checked;
+  if (watched && !title) return formError("Add the film's title before marking it watched.");
+  const date = editing.date;
+  const data = {
+    title: title || null,
+    director: $("f-director").value.trim() || null,
+    genre: $("f-genre").value.trim() || null,
+    mins, imdb: m ? m[0] : null, picker, watched
+  };
+  closeDialog(dlg);
+  write(() => sb.from("slots").update(data).eq("date", date), "Saved");
+});
+$("editor-clear").addEventListener("click", () => {
+  if (!editing) return;
+  const date = editing.date;
+  closeDialog(dlg);
+  write(() => sb.from("slots").update({ title: null, director: null, genre: null, mins: null, imdb: null, watched: false }).eq("date", date),
+    "Film cleared from that date");
+});
+
+/* ---------- boot ---------- */
+(async () => {
+  if (!window.supabase || !CFG.supabaseUrl || CFG.supabaseUrl.startsWith("PASTE")) {
+    return showStatus("The club's database isn't connected yet.", "Add the Supabase project URL and key to config.js.");
+  }
+  sb = window.supabase.createClient(CFG.supabaseUrl, CFG.supabaseAnonKey);
+  try {
+    await load();
+  } catch (e) {
+    return showStatus("The schedule couldn't load.", "The club's database may be paused or unreachable. Try again in a minute, or tell the club admin.");
+  }
+  const { data } = await sb.auth.getSession();
+  await setSession(data.session);
+  sb.auth.onAuthStateChange((event, s) => {
+    if (event === "SIGNED_IN" || event === "SIGNED_OUT" || event === "USER_UPDATED") setTimeout(() => setSession(s), 0);
+  });
+  sb.channel("club")
+    .on("postgres_changes", { event: "*", schema: "public", table: "slots" }, scheduleReload)
+    .on("postgres_changes", { event: "*", schema: "public", table: "ratings" }, scheduleReload)
+    .on("postgres_changes", { event: "*", schema: "public", table: "vetoes" }, scheduleReload)
+    .subscribe();
+  document.addEventListener("visibilitychange", () => { if (!document.hidden) scheduleReload(); });
+})();
+</script>
+</body>
+</html>
