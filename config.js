@@ -7,5 +7,5 @@ window.MOVIE_CLUB = {
   // Login names map to these addresses. No email is ever sent to them.
   emailDomain: "movieclub.com",
   // Free key from omdbapi.com, for posters and filling in film details from an IMDb link.
-  omdbApiKey: "PASTE_OMDB_KEY_HERE"
+  omdbApiKey: "b57fd6a3"
 };
