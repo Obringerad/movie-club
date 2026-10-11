@@ -118,6 +118,15 @@ section { display: grid; gap: 16px; min-width: 0; }
 /* Posters */
 .poster { display: block; width: 100%; aspect-ratio: 2 / 3; object-fit: cover; border-radius: 4px; background: var(--sunk); max-width: 100%; }
 .poster.blank { display: grid; place-items: center; color: var(--muted); font-family: var(--font-display); font-size: 20px; }
+/* Bigger poster that follows the cursor (mouse only). */
+.poster-pop {
+  position: fixed; left: 0; top: 0; z-index: 20; pointer-events: none;
+  width: 300px; aspect-ratio: 2 / 3; object-fit: cover; border-radius: 6px;
+  background: var(--sunk); box-shadow: 0 14px 44px rgb(0 0 0 / .5);
+  opacity: 0; transform: scale(.96); transition: opacity .12s ease-out, transform .12s ease-out;
+}
+.poster-pop.show { opacity: 1; transform: none; }
+@media (hover: hover) and (pointer: fine) { img.poster { cursor: zoom-in; } }
 
 /* Ticket */
 .ticket {
@@ -286,7 +295,7 @@ footer { color: var(--muted); font-size: 13px; text-align: center; padding-top: 
   .detail-takes .text { grid-column: 1 / -1; }
   .turn .sep { display: none; }
 }
-@media (prefers-reduced-motion: reduce) { .flash { animation: none; } }
+@media (prefers-reduced-motion: reduce) { .flash { animation: none; } .poster-pop { transition: none; } }
 </style>
 </head>
 <body>
@@ -623,6 +632,7 @@ function render() {
   renderTagline(D); renderTurn(D); renderTicket(D); renderTakes(D); renderVetoes();
   renderSchedule(D); renderOrder(D); renderWatched(D); renderGrid(D); renderMembers(D);
 
+  if (popFor && !popFor.isConnected) hidePop();
   if (keep) { const el = $(keep.id); if (el) { el.focus(); try { el.setSelectionRange(keep.pos, keep.pos); } catch (e) {} } }
 }
 
@@ -863,6 +873,36 @@ function renderMembers({ C, watched }) {
       </dl>
     </article>`).join("");
 }
+
+/* ---------- poster preview on hover ---------- */
+const pop = document.createElement("img");
+pop.className = "poster-pop"; pop.alt = ""; pop.referrerPolicy = "no-referrer"; pop.setAttribute("aria-hidden", "true");
+document.body.append(pop);
+const canHover = matchMedia("(hover: hover) and (pointer: fine)");
+let popFor = null;
+// OMDb poster links end in _SX300.jpg; ask for a sharper copy, falling back to the original.
+const bigPoster = url => url.replace(/_SX\d+(?=\.\w+$)/, "_SX600");
+pop.addEventListener("error", () => { if (popFor && pop.src !== popFor.src) pop.src = popFor.src; });
+function placePop(x, y) {
+  const h = Math.min(450, innerHeight - 16), w = h * 2 / 3, gap = 18;
+  pop.style.width = w + "px";
+  const left = x + gap + w <= innerWidth - 8 ? x + gap : Math.max(8, x - gap - w);
+  const top = Math.min(Math.max(8, y - h / 2), innerHeight - h - 8);
+  pop.style.left = left + "px"; pop.style.top = top + "px";
+}
+function hidePop() { popFor = null; pop.classList.remove("show"); }
+document.addEventListener("mouseover", e => {
+  if (!canHover.matches) return;
+  const img = e.target.closest && e.target.closest("img.poster");
+  if (!img || img === popFor) return;
+  popFor = img;
+  pop.src = bigPoster(img.src);
+  placePop(e.clientX, e.clientY);
+  pop.classList.add("show");
+});
+document.addEventListener("mousemove", e => { if (popFor) placePop(e.clientX, e.clientY); });
+document.addEventListener("mouseout", e => { if (popFor && e.target === popFor && e.relatedTarget !== popFor) hidePop(); });
+addEventListener("scroll", hidePop, { passive: true });
 
 /* ---------- interactions ---------- */
 $("sched-toggle").addEventListener("click", () => { showAll = !showAll; render(); });
