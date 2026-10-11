@@ -25,15 +25,15 @@ Anyone with the link can look. Members log in with their name and a password to 
 
 | Member | Email to enter |
 |---|---|
-| Jared | `jared@jboiz.example.com` |
-| Theo | `theo@jboiz.example.com` |
-| Ella | `ella@jboiz.example.com` |
-| Tim | `tim@jboiz.example.com` |
-| Raito | `raito@jboiz.example.com` |
-| Kwams | `kwams@jboiz.example.com` |
-| Alex | `alex@jboiz.example.com` |
-| Jeff | `jeff@jboiz.example.com` |
-| Gio | `gio@jboiz.example.com` |
+| Jared | `jared@movieclub.com` |
+| Theo | `theo@movieclub.com` |
+| Ella | `ella@movieclub.com` |
+| Tim | `tim@movieclub.com` |
+| Raito | `raito@movieclub.com` |
+| Kwams | `kwams@movieclub.com` |
+| Alex | `alex@movieclub.com` |
+| Jeff | `jeff@movieclub.com` |
+| Gio | `gio@movieclub.com` |
 
 Give each one a starting password and tick **Auto Confirm User**. These addresses are placeholders; no email is ever sent. On the site, members just pick their name and type the password. They can change it after logging in.
 
@@ -49,7 +49,7 @@ SQL Editor → new query → paste `supabase/link-accounts.sql` → **Run**. Eve
 ```sql
 update auth.users
 set encrypted_password = extensions.crypt('their-new-password', extensions.gen_salt('bf'))
-where email = 'ella@jboiz.example.com';
+where email = 'ella@movieclub.com';
 ```
 
 **Adding a member.** Add them to the members table (`pick_order` null for a guest critic), create their account as in step 4, then run `link-accounts.sql` again:

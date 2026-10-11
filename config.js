@@ -5,5 +5,5 @@ window.MOVIE_CLUB = {
   supabaseUrl: "https://odzpsnbcztjhmqofwljv.supabase.co",
   supabaseAnonKey: "sb_publishable_94ikJzCE7WqgNnuF3UNk_Q_qpL7JpPZ",
   // Login names map to these addresses. No email is ever sent to them.
-  emailDomain: "jboiz.example.com"
+  emailDomain: "movieclub.com"
 };
