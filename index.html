@@ -124,12 +124,11 @@ section { display: grid; gap: 16px; min-width: 0; }
   display: grid; grid-template-columns: minmax(0, 1fr) 210px;
   background: var(--surface); border: 1px solid var(--line); border-radius: 10px; overflow: hidden;
 }
-.ticket-main { padding: 24px 28px; display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 24px; min-width: 0; align-items: start; }
-.ticket-main.no-poster { grid-template-columns: minmax(0, 1fr); }
-.ticket-poster { width: 140px; }
-.ticket-body { display: grid; gap: 14px; min-width: 0; }
-.ticket-body .title { font-family: var(--font-display); font-weight: 400; font-size: clamp(28px, 5.5vw, 52px); line-height: 1; color: var(--fg); margin: 0; text-wrap: balance; overflow-wrap: anywhere; }
-.ticket-body .title.tba { color: var(--muted); }
+.ticket.has-poster { grid-template-columns: auto minmax(0, 1fr) 210px; }
+.ticket-poster { width: 212px; padding: 12px 0 12px 12px; }
+.ticket-main { padding: 24px 28px; display: grid; gap: 14px; min-width: 0; align-content: start; }
+.ticket-main .title { font-family: var(--font-display); font-weight: 400; font-size: clamp(28px, 5.5vw, 52px); line-height: 1; color: var(--fg); margin: 0; text-wrap: balance; overflow-wrap: anywhere; }
+.ticket-main .title.tba { color: var(--muted); }
 .facts { display: flex; flex-wrap: wrap; gap: 6px 22px; margin: 0; }
 .facts div { display: grid; gap: 0; }
 .facts dt { font-stretch: 75%; font-weight: 700; text-transform: uppercase; letter-spacing: .12em; font-size: 11px; color: var(--muted); }
@@ -157,7 +156,7 @@ section { display: grid; gap: 16px; min-width: 0; }
 
 /* Schedule */
 .schedule { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 10px; }
-.slot { display: grid; grid-template-columns: 52px minmax(0, 1fr) 40px; gap: 12px; align-items: center; padding: 10px 14px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); }
+.slot { display: grid; grid-template-columns: 52px minmax(0, 1fr) 60px; gap: 12px; align-items: center; padding: 6px 6px 6px 14px; min-height: 102px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); }
 .slot.mine { border-color: var(--accent); }
 .slot .date { text-align: center; line-height: 1.1; }
 .slot .date .m { font-size: 11px; letter-spacing: .12em; text-transform: uppercase; color: var(--muted); font-weight: 700; font-stretch: 75%; }
@@ -166,7 +165,7 @@ section { display: grid; gap: 16px; min-width: 0; }
 .slot .film.tba { color: var(--muted); font-weight: 500; font-style: italic; }
 .slot .who { font-size: 13px; color: var(--muted); }
 .slot .edit { margin-top: 2px; }
-.slot .poster { width: 40px; }
+.slot .poster { width: 60px; }
 
 /* Tables */
 .scroll { overflow-x: auto; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); }
@@ -180,17 +179,18 @@ th button[aria-sort="descending"]::after { content: "▼"; font-size: 9px; }
 th button[aria-sort] { color: var(--fg); }
 .watched td { white-space: nowrap; }
 .watched td.title-cell { min-width: 200px; white-space: normal; }
-.film-toggle { font: inherit; background: none; border: 0; padding: 0; cursor: pointer; color: var(--fg); text-align: left; display: grid; grid-template-columns: 32px minmax(0, 1fr); gap: 10px; align-items: center; width: 100%; }
+.film-toggle { font: inherit; background: none; border: 0; padding: 0; cursor: pointer; color: var(--fg); text-align: left; display: grid; grid-template-columns: 48px minmax(0, 1fr); gap: 10px; align-items: center; width: 100%; }
 .film-toggle.no-thumb { grid-template-columns: minmax(0, 1fr); }
-.film-toggle .poster { width: 32px; }
+.film-toggle .poster { width: 48px; }
+.watched td.title-cell { padding-block: 6px; padding-left: 6px; }
 .film-toggle b { font-weight: 600; display: block; }
 .film-toggle small { display: block; color: var(--muted); font-size: 13px; }
 .film-toggle .more { color: var(--muted); font-size: 12px; }
 .film-toggle:hover b { text-decoration: underline; text-decoration-color: var(--accent); text-underline-offset: 3px; }
 tr.open > td { background: var(--sunk); }
-tr.detail > td { background: var(--sunk); padding: 16px 16px 20px; white-space: normal; }
+tr.detail > td { background: var(--sunk); padding: 10px 12px 16px 10px; white-space: normal; }
 /* Stays in view when the table is scrolled sideways on a phone. */
-.detail-grid { display: grid; grid-template-columns: 110px minmax(0, 1fr); gap: 20px; align-items: start; position: sticky; left: 16px; max-width: min(720px, calc(100vw - 66px)); }
+.detail-grid { display: grid; grid-template-columns: 160px minmax(0, 1fr); gap: 20px; align-items: start; position: sticky; left: 10px; max-width: min(720px, calc(100vw - 66px)); }
 .detail-grid.no-poster { grid-template-columns: minmax(0, 1fr); }
 .detail-takes { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
 .detail-takes li { display: grid; grid-template-columns: 80px auto minmax(0, 1fr); gap: 10px; align-items: baseline; }
@@ -272,14 +272,16 @@ dialog h3 { margin: 0; font-family: var(--font-display); font-weight: 400; font-
 footer { color: var(--muted); font-size: 13px; text-align: center; padding-top: 24px; }
 
 @media (max-width: 640px) {
-  .ticket { grid-template-columns: 1fr; }
-  .ticket-main { padding: 20px; gap: 16px; }
-  .ticket-poster { width: 92px; }
+  .ticket, .ticket.has-poster { grid-template-columns: minmax(0, 1fr); }
+  .ticket.has-poster { grid-template-columns: 128px minmax(0, 1fr); }
+  .ticket-poster { width: 128px; padding: 10px 0 10px 10px; }
+  .ticket-main { padding: 16px; }
+  .stub { grid-column: 1 / -1; }
   .stub { border-left: 0; border-top: 2px dashed var(--line); grid-auto-flow: column; justify-content: space-between; align-items: center; text-align: left; justify-items: start; }
   .stub::before { top: -12px; left: -11px; } .stub::after { top: -12px; bottom: auto; left: auto; right: -11px; }
   .stub .day { font-size: 40px; }
   .row2 { grid-template-columns: 1fr; }
-  .detail-grid { grid-template-columns: 72px minmax(0, 1fr); gap: 14px; }
+  .detail-grid { grid-template-columns: 96px minmax(0, 1fr); gap: 14px; }
   .detail-takes li { grid-template-columns: 1fr auto; }
   .detail-takes .text { grid-column: 1 / -1; }
   .turn .sep { display: none; }
@@ -657,7 +659,7 @@ function renderTurn({ watched, upcoming }) {
 }
 
 function renderTicket({ next }) {
-  if (!next) { $("ticket").innerHTML = `<div class="ticket-main no-poster"><p class="muted">Every date on the calendar has been watched.</p></div>`; return; }
+  if (!next) { $("ticket").innerHTML = `<div class="ticket-main"><p class="muted">Every date on the calendar has been watched.</p></div>`; return; }
   const diff = dayNum(next.date) - today;
   const countdown = diff === 0 ? "Tonight" : diff === 1 ? "Tomorrow" : diff > 1 ? `In ${diff} days` : `Scheduled ${plural(-diff, "day")} ago`;
   const nv = vetoes.filter(v => v.slot === next.date);
@@ -667,10 +669,10 @@ function renderTicket({ next }) {
     ? `<span class="pill warn">${plural(nv.length, "veto")}${named.length ? ` · ${esc(named.join(", "))}` : ""}</span>`
     : `<span class="pill go">No vetoes · it's on</span>`;
   const poster = posterImg(next);
+  $("ticket").className = "ticket" + (poster ? " has-poster" : "");
   $("ticket").innerHTML = `
-    <div class="ticket-main ${poster ? "" : "no-poster"}">
-      ${poster ? `<div class="ticket-poster">${poster}</div>` : ""}
-      <div class="ticket-body">
+    ${poster ? `<div class="ticket-poster">${poster}</div>` : ""}
+    <div class="ticket-main">
         <span class="label">Admit the JBOIZ</span>
         ${next.title
           ? `<h3 class="title">${esc(next.title)}</h3>
@@ -690,7 +692,6 @@ function renderTicket({ next }) {
           ${next.title ? `<button class="btn small" type="button" data-act="watched" data-id="${next.date}">Mark as watched</button>` : ""}
           <button class="btn small" type="button" data-act="edit" data-id="${next.date}">${next.title ? "Edit" : "Add the film"}</button>
         </div>` : ""}
-      </div>
     </div>
     <div class="stub">
       <span class="label">${fmt(next.date, { weekday: "long" })}</span>
