@@ -10,7 +10,8 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bungee&family=Archivo:wdth,wght@62..125,400..800&family=DM+Mono:wght@400;500&display=swap">
 <style>
-/* Layout: a cinema lobby. Marquee header, a ticket for the next screening, then the program (schedule), the record (watched + ratings grid) and the house rules (pick order, vetoes). */
+/* Layout: a cinema lobby. Marquee header, a "your turn" bar for the logged-in member, then pinned tabs:
+   Next up (ticket, latest takes, vetoes) · Schedule (program, pick order) · Ratings (watched table, grid) · Critics. */
 :root {
   --bg: #f7ece6;
   --surface: #fffaf6;
@@ -37,13 +38,13 @@
 }
 
 * { box-sizing: border-box; }
-html { padding-top: env(safe-area-inset-top, 0px); padding-bottom: env(safe-area-inset-bottom, 0px); }
+html { padding-bottom: env(safe-area-inset-bottom, 0px); }
 body {
   margin: 0; background: var(--bg); color: var(--fg);
   font-family: var(--font-body); font-size: 15px; line-height: 1.5;
 }
 [hidden] { display: none !important; }
-.page { max-width: 1080px; margin: 0 auto; padding-inline: 16px; padding-block: 24px 64px; display: grid; gap: 48px; }
+.page { max-width: 1080px; margin: 0 auto; padding-inline: 16px; padding-block: calc(24px + env(safe-area-inset-top, 0px)) 64px; display: grid; gap: 24px; }
 h1, h2 { font-family: var(--font-display); font-weight: 400; color: var(--display); text-wrap: balance; margin: 0; line-height: 1.05; }
 h2 { font-size: clamp(22px, 3.2vw, 28px); }
 .label { font-family: var(--font-body); font-stretch: 75%; font-weight: 700; text-transform: uppercase; letter-spacing: .12em; font-size: 12px; color: var(--muted); }
@@ -53,7 +54,7 @@ a:focus-visible, button:focus-visible, select:focus-visible, input:focus-visible
 section { display: grid; gap: 16px; min-width: 0; }
 .section-head { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 8px 16px; }
 .section-head p { margin: 0; color: var(--muted); max-width: 60ch; }
-#content { display: grid; gap: 48px; }
+.panel { display: grid; gap: 48px; padding-top: 8px; }
 .muted { color: var(--muted); }
 
 /* Buttons */
@@ -85,18 +86,50 @@ section { display: grid; gap: 16px; min-width: 0; }
 .account { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 8px 14px; margin-top: 4px; font-size: 14px; }
 .account .me { font-weight: 700; }
 
+/* Your turn */
+.turn { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; padding: 12px 16px; border-radius: 8px; background: var(--sunk); border: 1px solid var(--line); }
+.turn .label { color: var(--display); }
+.turn .item { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.turn .sep { width: 1px; align-self: stretch; background: var(--line); }
+.chip-btn { font: inherit; font-size: 13px; font-weight: 600; padding: 3px 10px; border-radius: 999px; border: 1px solid var(--line); background: var(--surface); color: var(--fg); cursor: pointer; }
+.chip-btn:hover { border-color: var(--accent); }
+
+/* Tabs */
+.tabs {
+  position: sticky; top: 0; z-index: 5; background: var(--bg);
+  padding-top: env(safe-area-inset-top, 0px);
+  display: flex; gap: 4px; overflow-x: auto; scrollbar-width: none;
+  border-bottom: 1px solid var(--line); margin-inline: -16px; padding-inline: 16px;
+}
+.tabs::-webkit-scrollbar { display: none; }
+.tab {
+  font: inherit; font-stretch: 75%; font-weight: 700; text-transform: uppercase; letter-spacing: .1em; font-size: 14px;
+  color: var(--muted); background: none; border: 0; border-bottom: 3px solid transparent;
+  padding: 14px 14px 11px; cursor: pointer; white-space: nowrap;
+}
+.tab:hover { color: var(--fg); }
+.tab[aria-selected="true"] { color: var(--fg); border-bottom-color: var(--accent); }
+.tab .count { font-family: var(--font-data); font-size: 12px; font-weight: 500; letter-spacing: 0; opacity: .7; }
+
 /* Status */
 .status { padding: 40px 24px; text-align: center; color: var(--muted); border: 1px dashed var(--line); border-radius: 8px; }
 .status strong { display: block; color: var(--fg); font-size: 17px; margin-bottom: 4px; }
+
+/* Posters */
+.poster { display: block; width: 100%; aspect-ratio: 2 / 3; object-fit: cover; border-radius: 4px; background: var(--sunk); max-width: 100%; }
+.poster.blank { display: grid; place-items: center; color: var(--muted); font-family: var(--font-display); font-size: 20px; }
 
 /* Ticket */
 .ticket {
   display: grid; grid-template-columns: minmax(0, 1fr) 210px;
   background: var(--surface); border: 1px solid var(--line); border-radius: 10px; overflow: hidden;
 }
-.ticket-main { padding: 24px 28px; display: grid; gap: 14px; min-width: 0; }
-.ticket-main .title { font-family: var(--font-display); font-weight: 400; font-size: clamp(30px, 6vw, 52px); line-height: 1; color: var(--fg); margin: 0; text-wrap: balance; overflow-wrap: anywhere; }
-.ticket-main .title.tba { color: var(--muted); }
+.ticket-main { padding: 24px 28px; display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 24px; min-width: 0; align-items: start; }
+.ticket-main.no-poster { grid-template-columns: minmax(0, 1fr); }
+.ticket-poster { width: 140px; }
+.ticket-body { display: grid; gap: 14px; min-width: 0; }
+.ticket-body .title { font-family: var(--font-display); font-weight: 400; font-size: clamp(28px, 5.5vw, 52px); line-height: 1; color: var(--fg); margin: 0; text-wrap: balance; overflow-wrap: anywhere; }
+.ticket-body .title.tba { color: var(--muted); }
 .facts { display: flex; flex-wrap: wrap; gap: 6px 22px; margin: 0; }
 .facts div { display: grid; gap: 0; }
 .facts dt { font-stretch: 75%; font-weight: 700; text-transform: uppercase; letter-spacing: .12em; font-size: 11px; color: var(--muted); }
@@ -115,9 +148,17 @@ section { display: grid; gap: 16px; min-width: 0; }
 .pill.go { background: var(--accent); color: var(--on-accent); border-color: transparent; }
 .pill.warn { color: var(--danger); border-color: currentColor; background: transparent; }
 
+/* Takes */
+.takes { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 10px; }
+.take { display: grid; gap: 6px; padding: 14px 16px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); align-content: start; }
+.take .who { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; font-weight: 700; }
+.take .film { font-size: 13px; color: var(--muted); }
+.take q { font-size: 16px; quotes: "“" "”"; overflow-wrap: anywhere; }
+
 /* Schedule */
-.schedule { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 10px; }
-.slot { display: grid; grid-template-columns: 52px minmax(0, 1fr); gap: 12px; align-items: center; padding: 10px 14px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); }
+.schedule { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 10px; }
+.slot { display: grid; grid-template-columns: 52px minmax(0, 1fr) 40px; gap: 12px; align-items: center; padding: 10px 14px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); }
+.slot.mine { border-color: var(--accent); }
 .slot .date { text-align: center; line-height: 1.1; }
 .slot .date .m { font-size: 11px; letter-spacing: .12em; text-transform: uppercase; color: var(--muted); font-weight: 700; font-stretch: 75%; }
 .slot .date .d { font-family: var(--font-display); font-size: 24px; color: var(--display); }
@@ -125,6 +166,7 @@ section { display: grid; gap: 16px; min-width: 0; }
 .slot .film.tba { color: var(--muted); font-weight: 500; font-style: italic; }
 .slot .who { font-size: 13px; color: var(--muted); }
 .slot .edit { margin-top: 2px; }
+.slot .poster { width: 40px; }
 
 /* Tables */
 .scroll { overflow-x: auto; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); }
@@ -137,11 +179,30 @@ th button[aria-sort="ascending"]::after { content: "▲"; font-size: 9px; }
 th button[aria-sort="descending"]::after { content: "▼"; font-size: 9px; }
 th button[aria-sort] { color: var(--fg); }
 .watched td { white-space: nowrap; }
-.watched td.title-cell { font-weight: 600; min-width: 180px; white-space: normal; }
-.watched td.title-cell small { display: block; font-weight: 400; color: var(--muted); font-size: 13px; }
+.watched td.title-cell { min-width: 200px; white-space: normal; }
+.film-toggle { font: inherit; background: none; border: 0; padding: 0; cursor: pointer; color: var(--fg); text-align: left; display: grid; grid-template-columns: 32px minmax(0, 1fr); gap: 10px; align-items: center; width: 100%; }
+.film-toggle.no-thumb { grid-template-columns: minmax(0, 1fr); }
+.film-toggle .poster { width: 32px; }
+.film-toggle b { font-weight: 600; display: block; }
+.film-toggle small { display: block; color: var(--muted); font-size: 13px; }
+.film-toggle .more { color: var(--muted); font-size: 12px; }
+.film-toggle:hover b { text-decoration: underline; text-decoration-color: var(--accent); text-underline-offset: 3px; }
+tr.open > td { background: var(--sunk); }
+tr.detail > td { background: var(--sunk); padding: 16px 16px 20px; white-space: normal; }
+/* Stays in view when the table is scrolled sideways on a phone. */
+.detail-grid { display: grid; grid-template-columns: 110px minmax(0, 1fr); gap: 20px; align-items: start; position: sticky; left: 16px; max-width: min(720px, calc(100vw - 66px)); }
+.detail-grid.no-poster { grid-template-columns: minmax(0, 1fr); }
+.detail-takes { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.detail-takes li { display: grid; grid-template-columns: 80px auto minmax(0, 1fr); gap: 10px; align-items: baseline; }
+.detail-takes .name { font-weight: 700; }
+.detail-takes .text { overflow-wrap: anywhere; }
+.review-form { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-top: 12px; }
+.review-form input { font: inherit; flex: 1 1 240px; min-width: 0; padding: 7px 10px; border-radius: 6px; border: 1px solid var(--line); background: var(--surface); color: var(--fg); }
 .rank { color: var(--muted); width: 1%; }
+.flash { animation: flash 1.6s ease-out; }
+@keyframes flash { from { box-shadow: inset 0 0 0 999px color-mix(in oklab, var(--accent) 35%, transparent); } to { box-shadow: inset 0 0 0 999px transparent; } }
 
-.stars { position: relative; display: inline-block; font-size: 15px; letter-spacing: 1px; line-height: 1; color: var(--line); vertical-align: -1px; }
+.stars { position: relative; display: inline-block; font-size: 15px; letter-spacing: 1px; line-height: 1; color: var(--line); vertical-align: -1px; white-space: nowrap; }
 .stars span { position: absolute; inset: 0 auto 0 0; overflow: hidden; white-space: nowrap; color: var(--accent); }
 .score { display: inline-flex; align-items: center; gap: 8px; }
 
@@ -176,11 +237,11 @@ th button[aria-sort] { color: var(--fg); }
 .bar { height: 6px; border-radius: 3px; background: var(--sunk); overflow: hidden; }
 .bar span { display: block; height: 100%; background: var(--accent); }
 
-/* House rules */
-.rules { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 16px; align-items: start; }
-.rules section { padding: 18px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); gap: 12px; }
-.rules h3 { margin: 0; font-family: var(--font-display); font-weight: 400; font-size: 18px; color: var(--display); }
-.order { margin: 0; padding: 0; list-style: none; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
+/* Side boxes */
+.box { padding: 18px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); display: grid; gap: 12px; }
+.box h3 { margin: 0; font-family: var(--font-display); font-weight: 400; font-size: 18px; color: var(--display); }
+.box p { margin: 0; color: var(--muted); font-size: 14px; }
+.order { margin: 0; padding: 0; list-style: none; display: grid; grid-template-columns: repeat(auto-fill, minmax(76px, 1fr)); gap: 8px; }
 .order li { display: grid; justify-items: center; gap: 2px; padding: 8px 4px; border-radius: 6px; background: var(--sunk); }
 .order li.up { background: var(--accent); color: var(--on-accent); }
 .order .n { font-family: var(--font-data); font-size: 12px; opacity: .75; }
@@ -188,7 +249,6 @@ th button[aria-sort] { color: var(--fg); }
 .veto-list { margin: 0; padding: 0; list-style: none; display: grid; gap: 8px; }
 .veto-list li { display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap; padding-bottom: 8px; border-bottom: 1px solid var(--line); }
 .veto-list li:last-child { border-bottom: 0; padding-bottom: 0; }
-.rules p { margin: 0; color: var(--muted); font-size: 14px; }
 
 /* Dialogs */
 dialog { border: 1px solid var(--line); border-radius: 10px; background: var(--surface); color: var(--fg); padding: 0; width: min(520px, calc(100vw - 32px)); }
@@ -209,16 +269,22 @@ dialog h3 { margin: 0; font-family: var(--font-display); font-weight: 400; font-
 /* Toast */
 .toast { position: fixed; left: 50%; bottom: calc(20px + env(safe-area-inset-bottom, 0px)); transform: translateX(-50%); background: var(--fg); color: var(--bg); padding: 10px 16px; border-radius: 8px; font-weight: 600; font-size: 14px; max-width: calc(100vw - 32px); z-index: 10; box-shadow: 0 6px 24px rgb(0 0 0 / .25); }
 
-footer { color: var(--muted); font-size: 13px; text-align: center; }
+footer { color: var(--muted); font-size: 13px; text-align: center; padding-top: 24px; }
 
 @media (max-width: 640px) {
   .ticket { grid-template-columns: 1fr; }
+  .ticket-main { padding: 20px; gap: 16px; }
+  .ticket-poster { width: 92px; }
   .stub { border-left: 0; border-top: 2px dashed var(--line); grid-auto-flow: column; justify-content: space-between; align-items: center; text-align: left; justify-items: start; }
   .stub::before { top: -12px; left: -11px; } .stub::after { top: -12px; bottom: auto; left: auto; right: -11px; }
   .stub .day { font-size: 40px; }
-  .ticket-main { padding: 20px; }
   .row2 { grid-template-columns: 1fr; }
+  .detail-grid { grid-template-columns: 72px minmax(0, 1fr); gap: 14px; }
+  .detail-takes li { grid-template-columns: 1fr auto; }
+  .detail-takes .text { grid-column: 1 / -1; }
+  .turn .sep { display: none; }
 }
+@media (prefers-reduced-motion: reduce) { .flash { animation: none; } }
 </style>
 </head>
 <body>
@@ -230,77 +296,87 @@ footer { color: var(--muted); font-size: 13px; text-align: center; }
     <div class="account" id="account"></div>
   </header>
 
+  <div class="turn" id="turn" hidden></div>
+
+  <nav class="tabs" role="tablist" aria-label="Sections" id="tabs">
+    <button class="tab" role="tab" id="tab-next" aria-controls="panel-next" data-tab="next">Next up</button>
+    <button class="tab" role="tab" id="tab-schedule" aria-controls="panel-schedule" data-tab="schedule">Schedule</button>
+    <button class="tab" role="tab" id="tab-ratings" aria-controls="panel-ratings" data-tab="ratings">Ratings</button>
+    <button class="tab" role="tab" id="tab-critics" aria-controls="panel-critics" data-tab="critics">Critics</button>
+  </nav>
+
   <div class="status" id="status"><strong>Loading the club's schedule…</strong>Screenings, ratings and vetoes are on their way.</div>
 
   <div id="content" hidden>
-    <section aria-labelledby="next-h">
-      <div class="section-head"><h2 id="next-h">Next screening</h2></div>
-      <article class="ticket" id="ticket"></article>
-    </section>
-
-    <section aria-labelledby="sched-h">
-      <div class="section-head">
-        <h2 id="sched-h">Coming up</h2>
-        <p>Two screenings a week. Picks rotate in the pick order below. Log in to fill in your film.</p>
-      </div>
-      <ul class="schedule" id="schedule"></ul>
-      <button class="btn" id="sched-toggle" type="button" style="justify-self:start"></button>
-    </section>
-
-    <section aria-labelledby="watched-h">
-      <div class="section-head">
-        <h2 id="watched-h">Already watched</h2>
-        <p id="watched-sub"></p>
-      </div>
-      <div class="scroll">
-        <table class="watched">
-          <thead><tr>
-            <th class="rank">#</th>
-            <th><button type="button" data-sort="title">Film</button></th>
-            <th><button type="button" data-sort="avg">Club rating</button></th>
-            <th id="yours-h">Your rating</th>
-            <th><button type="button" data-sort="date">Watched</button></th>
-            <th><button type="button" data-sort="picker">Picked by</button></th>
-            <th><button type="button" data-sort="runtime">Runtime</button></th>
-            <th>Genre</th>
-            <th>Link</th>
-          </tr></thead>
-          <tbody id="watched-body"></tbody>
-        </table>
-      </div>
-    </section>
-
-    <section aria-labelledby="grid-h">
-      <div class="section-head">
-        <h2 id="grid-h">Every rating</h2>
-        <div class="legend" id="legend"></div>
-      </div>
-      <div class="scroll"><table class="grid-table" id="grid"></table></div>
-    </section>
-
-    <section aria-labelledby="mem-h">
-      <div class="section-head">
-        <h2 id="mem-h">The critics</h2>
-        <p>Averages count only the films each person rated.</p>
-      </div>
-      <div class="members" id="members"></div>
-    </section>
-
-    <div class="rules">
-      <section aria-labelledby="order-h">
-        <h3 id="order-h">Pick order</h3>
-        <ol class="order" id="order"></ol>
-        <p id="order-note"></p>
+    <div class="panel" role="tabpanel" id="panel-next" aria-labelledby="tab-next">
+      <section aria-labelledby="next-h">
+        <div class="section-head"><h2 id="next-h">Next screening</h2></div>
+        <article class="ticket" id="ticket"></article>
       </section>
-      <section aria-labelledby="veto-h">
-        <h3 id="veto-h">Veto log</h3>
+      <section aria-labelledby="takes-h" id="takes-section">
+        <div class="section-head">
+          <h2 id="takes-h">Latest takes</h2>
+          <p>What people said with their stars. Add yours from the Ratings tab.</p>
+        </div>
+        <ul class="takes" id="takes"></ul>
+      </section>
+      <div class="box">
+        <h3>Veto log</h3>
         <ul class="veto-list" id="vetoes"></ul>
         <p>Any member can veto the next movie from its ticket above.</p>
+      </div>
+    </div>
+
+    <div class="panel" role="tabpanel" id="panel-schedule" aria-labelledby="tab-schedule" hidden>
+      <section aria-labelledby="sched-h">
+        <div class="section-head">
+          <h2 id="sched-h">Coming up</h2>
+          <p>Two screenings a week. Picks rotate in the pick order below. Log in to fill in your film.</p>
+        </div>
+        <ul class="schedule" id="schedule"></ul>
+        <button class="btn" id="sched-toggle" type="button" style="justify-self:start"></button>
+      </section>
+      <div class="box">
+        <h3>Pick order</h3>
+        <ol class="order" id="order"></ol>
+        <p id="order-note"></p>
+      </div>
+    </div>
+
+    <div class="panel" role="tabpanel" id="panel-ratings" aria-labelledby="tab-ratings" hidden>
+      <section aria-labelledby="watched-h">
+        <div class="section-head">
+          <h2 id="watched-h">Already watched</h2>
+          <p id="watched-sub"></p>
+        </div>
+        <div class="scroll">
+          <table class="watched">
+            <thead><tr id="watched-head"></tr></thead>
+            <tbody id="watched-body"></tbody>
+          </table>
+        </div>
+      </section>
+      <section aria-labelledby="grid-h">
+        <div class="section-head">
+          <h2 id="grid-h">Every rating</h2>
+          <div class="legend" id="legend"></div>
+        </div>
+        <div class="scroll"><table class="grid-table" id="grid"></table></div>
+      </section>
+    </div>
+
+    <div class="panel" role="tabpanel" id="panel-critics" aria-labelledby="tab-critics" hidden>
+      <section aria-labelledby="mem-h">
+        <div class="section-head">
+          <h2 id="mem-h">The critics</h2>
+          <p>Averages count only the films each person rated.</p>
+        </div>
+        <div class="members" id="members"></div>
       </section>
     </div>
   </div>
 
-  <footer>Anyone with the link can look. Log in to rate, pick and veto.</footer>
+  <footer>Anyone with the link can look. Log in to rate, review, pick and veto. Posters and film details from OMDb.</footer>
 </main>
 
 <dialog id="login" class="narrow" aria-labelledby="login-h">
@@ -352,6 +428,11 @@ footer { color: var(--muted); font-size: 13px; text-align: center; }
     <h3 id="editor-h">Edit screening</h3>
     <p class="muted" id="editor-when" style="margin:0"></p>
     <div class="field">
+      <label for="f-imdb">IMDb link</label>
+      <input id="f-imdb" autocomplete="off" placeholder="https://www.imdb.com/title/tt0118694/">
+      <span class="help" id="imdb-help">Paste the film's IMDb page link.</span>
+    </div>
+    <div class="field">
       <label for="f-title">Film title</label>
       <input id="f-title" autocomplete="off" maxlength="120">
     </div>
@@ -364,11 +445,6 @@ footer { color: var(--muted); font-size: 13px; text-align: center; }
       <div class="field"><label for="f-picker">Picked by</label><input id="f-picker" list="picker-list" autocomplete="off" maxlength="60"></div>
     </div>
     <datalist id="picker-list"></datalist>
-    <div class="field">
-      <label for="f-imdb">IMDb link</label>
-      <input id="f-imdb" autocomplete="off" placeholder="https://www.imdb.com/title/tt0118694/">
-      <span class="help">Paste the film's IMDb page link.</span>
-    </div>
     <label class="check"><input type="checkbox" id="f-watched"> We've watched it</label>
     <p class="form-error" id="editor-error" hidden></p>
     <div class="dialog-actions">
@@ -387,6 +463,7 @@ footer { color: var(--muted); font-size: 13px; text-align: center; }
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.2/dist/umd/supabase.js"></script>
 <script>
 const CFG = window.MOVIE_CLUB || {};
+const OMDB_KEY = CFG.omdbApiKey && !CFG.omdbApiKey.startsWith("PASTE") ? CFG.omdbApiKey : "";
 
 /* ---------- helpers ---------- */
 const $ = id => document.getElementById(id);
@@ -401,6 +478,9 @@ const runtime = m => !m ? "" : m >= 600 ? `${Math.round(m / 60).toLocaleString()
 const imdbUrl = id => `https://www.imdb.com/title/${id}/`;
 const stars = v => `<span class="stars" role="img" aria-label="${v.toFixed(1)} out of 5">★★★★★<span style="width:${(v / 5) * 100}%" aria-hidden="true">★★★★★</span></span>`;
 const plural = (n, w) => `${n} ${w}${n === 1 ? "" : "s"}`;
+const hasPoster = s => s.poster && s.poster !== "none";
+const posterImg = (s, cls = "") => hasPoster(s) ? `<img class="poster ${cls}" src="${esc(s.poster)}" alt="" loading="lazy" referrerpolicy="no-referrer">` : "";
+const isPicker = (slot, name) => !!name && (slot.picker || "").split(/\s*&\s*/).includes(name);
 
 let toastTimer;
 function toast(msg) {
@@ -418,12 +498,16 @@ document.querySelectorAll("dialog [data-close]").forEach(b => b.addEventListener
 /* ---------- state ---------- */
 let sb = null;
 let members = [];   // [{name, pick_order}]
-let slots = null;   // [{date, title, director, genre, mins, imdb, picker, watched, ratings: {name: score}}]
+let slots = null;   // [{date, title, ..., poster, ratings: {name: score}, reviews: {name: {text, at}}}]
 let vetoes = [];    // [{id, slot, member, created_at}]
 let me = null;      // logged-in member's name, or null
 let session = null;
 let showAll = false;
-let sortKey = "date", sortDir = 1;
+let sortKey = "date", sortDir = -1;   // newest first
+let tab = "next";
+const openFilms = new Set();          // expanded rows in the watched table
+const drafts = {};                    // unsaved review text, by film date
+let canReview = false, canPoster = false; // database has the review / poster columns
 
 const critics = () => members.map(m => m.name);
 const pickOrder = () => members.filter(m => m.pick_order != null).sort((a, b) => a.pick_order - b.pick_order).map(m => m.name);
@@ -433,14 +517,20 @@ async function load() {
   const [m, s, r, v] = await Promise.all([
     sb.from("members").select("name, pick_order").order("pick_order", { nullsFirst: false }),
     sb.from("slots").select("*").order("date"),
-    sb.from("ratings").select("slot, member, score"),
+    sb.from("ratings").select("*"),
     sb.from("vetoes").select("id, slot, member, created_at")
   ]);
   const err = m.error || s.error || r.error || v.error;
   if (err) throw err;
   members = m.data;
-  const byDate = new Map(s.data.map(x => [x.date, { ...x, ratings: {} }]));
-  r.data.forEach(x => { const sl = byDate.get(x.slot); if (sl) sl.ratings[x.member] = x.score; });
+  canPoster = s.data.length > 0 && "poster" in s.data[0];
+  canReview = r.data.length > 0 && "review" in r.data[0];
+  const byDate = new Map(s.data.map(x => [x.date, { ...x, ratings: {}, reviews: {} }]));
+  r.data.forEach(x => {
+    const sl = byDate.get(x.slot); if (!sl) return;
+    sl.ratings[x.member] = x.score;
+    if (x.review) sl.reviews[x.member] = { text: x.review, at: x.updated_at };
+  });
   slots = [...byDate.values()];
   vetoes = v.data;
 }
@@ -456,6 +546,7 @@ async function write(op, okMsg) {
   const { error } = await op();
   if (error) {
     if (error.code === "42501" || /row-level security/i.test(error.message)) toast("That change isn't allowed for your account.");
+    else if (error.code === "23514") toast("That's too long. Keep reviews under 200 characters.");
     else if (/JWT|session/i.test(error.message)) { toast("Your login expired. Log in again."); openLogin(); }
     else toast("That change didn't save. Check your connection and try again.");
     scheduleReload();
@@ -478,6 +569,31 @@ function derive() {
   return { C, ordered, watched, upcoming, next: upcoming[0] || null };
 }
 
+/* ---------- tabs ---------- */
+const TABS = ["next", "schedule", "ratings", "critics"];
+function setTab(t, { scroll = true } = {}) {
+  if (!TABS.includes(t)) t = "next";
+  tab = t;
+  TABS.forEach(x => {
+    const b = $("tab-" + x);
+    b.setAttribute("aria-selected", x === t ? "true" : "false");
+    b.tabIndex = x === t ? 0 : -1;
+    $("panel-" + x).hidden = x !== t;
+  });
+  try { history.replaceState(null, "", t === "next" ? location.pathname : "#" + t); } catch (e) {}
+  if (scroll) {
+    const nav = $("tabs");
+    if (nav.getBoundingClientRect().top < 0) window.scrollTo({ top: nav.offsetTop, behavior: "instant" });
+  }
+}
+$("tabs").addEventListener("click", e => { const b = e.target.closest("[data-tab]"); if (b) setTab(b.dataset.tab); });
+$("tabs").addEventListener("keydown", e => {
+  if (e.key !== "ArrowRight" && e.key !== "ArrowLeft") return;
+  const i = TABS.indexOf(tab), n = TABS[(i + (e.key === "ArrowRight" ? 1 : TABS.length - 1)) % TABS.length];
+  setTab(n); $("tab-" + n).focus();
+});
+setTab(location.hash.slice(1), { scroll: false });
+
 /* ---------- render ---------- */
 function renderAccount() {
   $("account").innerHTML = me
@@ -493,12 +609,19 @@ function renderAccount() {
 }
 
 function render() {
+  // Keep a half-typed review and its cursor through live refreshes.
+  const active = document.activeElement;
+  const keep = active && active.dataset && active.dataset.review ? { id: active.id, pos: active.selectionStart } : null;
+
   renderAccount();
   if (!slots) return;
   if (!slots.length) return showStatus("No screenings on the calendar yet.", "Once the club's schedule is added it shows up here.");
   $("status").hidden = true; $("content").hidden = false;
   const D = derive();
-  renderTagline(D); renderTicket(D); renderSchedule(D); renderWatched(D); renderGrid(D); renderMembers(D); renderRules(D);
+  renderTagline(D); renderTurn(D); renderTicket(D); renderTakes(D); renderVetoes();
+  renderSchedule(D); renderOrder(D); renderWatched(D); renderGrid(D); renderMembers(D);
+
+  if (keep) { const el = $(keep.id); if (el) { el.focus(); try { el.setSelectionRange(keep.pos, keep.pos); } catch (e) {} } }
 }
 
 function renderTagline({ ordered, watched }) {
@@ -513,8 +636,28 @@ function renderTagline({ ordered, watched }) {
   ].join("");
 }
 
+function renderTurn({ watched, upcoming }) {
+  const el = $("turn");
+  if (!me) { el.hidden = true; return; }
+  const parts = [];
+  const unrated = watched.filter(f => !f.ratings[me]).sort((a, b) => b.date.localeCompare(a.date));
+  if (unrated.length) {
+    const shown = unrated.slice(0, 3);
+    parts.push(`<span class="item"><span>Rate:</span>${shown.map(f => `<button class="chip-btn" type="button" data-act="goto" data-id="${f.date}">${esc(f.title)}</button>`).join("")}${unrated.length > 3 ? `<button class="link-btn" type="button" data-act="goto-tab" data-id="ratings">+${unrated.length - 3} more</button>` : ""}</span>`);
+  }
+  const mine = upcoming.find(s => isPicker(s, me));
+  if (mine) {
+    const when = fmt(mine.date, { weekday: "short", month: "short", day: "numeric" });
+    parts.push(mine.title
+      ? `<span class="item">Your next pick: <b>${esc(mine.title)}</b> · ${when}</span>`
+      : `<span class="item">Your pick for <b>${when}</b> isn't in yet <button class="chip-btn" type="button" data-act="edit" data-id="${mine.date}">Add it</button></span>`);
+  }
+  el.hidden = !parts.length;
+  el.innerHTML = `<span class="label">Your turn</span>${parts.join(`<span class="sep" aria-hidden="true"></span>`)}`;
+}
+
 function renderTicket({ next }) {
-  if (!next) { $("ticket").innerHTML = `<div class="ticket-main"><p class="muted">Every date on the calendar has been watched.</p></div>`; return; }
+  if (!next) { $("ticket").innerHTML = `<div class="ticket-main no-poster"><p class="muted">Every date on the calendar has been watched.</p></div>`; return; }
   const diff = dayNum(next.date) - today;
   const countdown = diff === 0 ? "Tonight" : diff === 1 ? "Tomorrow" : diff > 1 ? `In ${diff} days` : `Scheduled ${plural(-diff, "day")} ago`;
   const nv = vetoes.filter(v => v.slot === next.date);
@@ -523,28 +666,31 @@ function renderTicket({ next }) {
   const vetoPill = nv.length
     ? `<span class="pill warn">${plural(nv.length, "veto")}${named.length ? ` · ${esc(named.join(", "))}` : ""}</span>`
     : `<span class="pill go">No vetoes · it's on</span>`;
-  const editLabel = next.title ? "Edit" : "Add the film";
+  const poster = posterImg(next);
   $("ticket").innerHTML = `
-    <div class="ticket-main">
-      <span class="label">Admit the JBOIZ</span>
-      ${next.title
-        ? `<h3 class="title">${esc(next.title)}</h3>
-           <dl class="facts">
-             ${next.director ? `<div><dt>Director</dt><dd>${esc(next.director)}</dd></div>` : ""}
-             ${next.genre ? `<div><dt>Genre</dt><dd>${esc(next.genre)}</dd></div>` : ""}
-             ${next.mins ? `<div><dt>Runtime</dt><dd class="num">${runtime(next.mins)}</dd></div>` : ""}
-             <div><dt>Picked by</dt><dd>${esc(next.picker)}</dd></div>
-           </dl>`
-        : `<h3 class="title tba">Pick not in yet</h3><p class="muted" style="margin:0">It's ${esc(next.picker)}'s turn to choose.</p>`}
-      <div class="actions">
-        ${next.imdb ? `<a class="btn primary" href="${imdbUrl(esc(next.imdb))}" target="_blank" rel="noopener">View on IMDb ↗</a>` : ""}
-        ${vetoPill}
+    <div class="ticket-main ${poster ? "" : "no-poster"}">
+      ${poster ? `<div class="ticket-poster">${poster}</div>` : ""}
+      <div class="ticket-body">
+        <span class="label">Admit the JBOIZ</span>
+        ${next.title
+          ? `<h3 class="title">${esc(next.title)}</h3>
+             <dl class="facts">
+               ${next.director ? `<div><dt>Director</dt><dd>${esc(next.director)}</dd></div>` : ""}
+               ${next.genre ? `<div><dt>Genre</dt><dd>${esc(next.genre)}</dd></div>` : ""}
+               ${next.mins ? `<div><dt>Runtime</dt><dd class="num">${runtime(next.mins)}</dd></div>` : ""}
+               <div><dt>Picked by</dt><dd>${esc(next.picker)}</dd></div>
+             </dl>`
+          : `<h3 class="title tba">Pick not in yet</h3><p class="muted" style="margin:0">It's ${esc(next.picker)}'s turn to choose.</p>`}
+        <div class="actions">
+          ${next.imdb ? `<a class="btn primary" href="${imdbUrl(esc(next.imdb))}" target="_blank" rel="noopener">View on IMDb ↗</a>` : ""}
+          ${vetoPill}
+        </div>
+        ${me ? `<div class="actions">
+          ${next.title ? `<button class="btn small" type="button" data-act="veto" data-id="${next.date}">${mine ? "Withdraw my veto" : "Veto this movie"}</button>` : ""}
+          ${next.title ? `<button class="btn small" type="button" data-act="watched" data-id="${next.date}">Mark as watched</button>` : ""}
+          <button class="btn small" type="button" data-act="edit" data-id="${next.date}">${next.title ? "Edit" : "Add the film"}</button>
+        </div>` : ""}
       </div>
-      ${me ? `<div class="actions">
-        ${next.title ? `<button class="btn small" type="button" data-act="veto" data-id="${next.date}">${mine ? "Withdraw my veto" : "Veto this movie"}</button>` : ""}
-        ${next.title ? `<button class="btn small" type="button" data-act="watched" data-id="${next.date}">Mark as watched</button>` : ""}
-        <button class="btn small" type="button" data-act="edit" data-id="${next.date}">${editLabel}</button>
-      </div>` : ""}
     </div>
     <div class="stub">
       <span class="label">${fmt(next.date, { weekday: "long" })}</span>
@@ -554,12 +700,35 @@ function renderTicket({ next }) {
     </div>`;
 }
 
+function renderTakes({ watched }) {
+  const all = [];
+  watched.forEach(f => Object.entries(f.reviews).forEach(([name, r]) => all.push({ f, name, ...r, score: f.ratings[name] })));
+  all.sort((a, b) => (b.at || "").localeCompare(a.at || ""));
+  $("takes-section").hidden = !canReview;
+  $("takes").innerHTML = all.length
+    ? all.slice(0, 6).map(t => `
+      <li class="take">
+        <div class="who"><span>${esc(t.name)}</span>${t.score ? stars(t.score) : ""}</div>
+        <q>${esc(t.text)}</q>
+        <button class="link-btn film" type="button" data-act="goto" data-id="${t.f.date}">on ${esc(t.f.title)}</button>
+      </li>`).join("")
+    : `<li class="muted">No reviews yet. After the next screening, open a film in the Ratings tab and add a line with your stars.</li>`;
+}
+
+function renderVetoes() {
+  const titleOf = d => (slots.find(s => s.date === d) || {}).title || fmt(d, { month: "short", day: "numeric" });
+  const sorted = [...vetoes].sort((a, b) => b.created_at.localeCompare(a.created_at));
+  $("vetoes").innerHTML = sorted.length
+    ? sorted.map(v => `<li><span>${esc(titleOf(v.slot))}${v.member ? ` <span class="muted">· ${esc(v.member)}</span>` : ""}</span><span class="num muted">${fmtTs(v.created_at, { month: "short", day: "numeric" })}</span></li>`).join("")
+    : `<li class="muted">No vetoes yet.</li>`;
+}
+
 const SHOWN = 12;
 function renderSchedule({ upcoming }) {
   const later = upcoming.slice(1);
   const list = showAll ? later : later.slice(0, SHOWN);
   $("schedule").innerHTML = list.map(f => `
-    <li class="slot">
+    <li class="slot ${isPicker(f, me) ? "mine" : ""}">
       <div class="date"><div class="m">${fmt(f.date, { month: "short" })}</div><div class="d">${fmt(f.date, { day: "numeric" })}</div></div>
       <div>
         ${f.title
@@ -568,10 +737,21 @@ function renderSchedule({ upcoming }) {
         <div class="who">${fmt(f.date, { weekday: "short" })} · ${esc(f.picker)}'s pick${f.mins ? ` · <span class="num">${runtime(f.mins)}</span>` : ""}</div>
         ${me ? `<button class="link-btn edit" type="button" data-act="edit" data-id="${f.date}">${f.title ? "Edit" : "Add film"}</button>` : ""}
       </div>
+      <div>${posterImg(f)}</div>
     </li>`).join("");
   const tog = $("sched-toggle");
   tog.hidden = later.length <= SHOWN;
   if (later.length) tog.textContent = showAll ? "Show fewer dates" : `Show all ${later.length} dates through ${fmt(later[later.length - 1].date, { month: "short", year: "numeric" })}`;
+}
+
+function renderOrder({ next }) {
+  const order = pickOrder();
+  const up = next ? next.picker : "";
+  $("order").innerHTML = order.map((m, i) => `<li class="${m === up ? "up" : ""}"><span class="n">${i + 1}</span><span class="who">${esc(m)}</span></li>`).join("");
+  const guests = critics().filter(c => !order.includes(c));
+  $("order-note").textContent = next
+    ? `${next.picker} has the current pick.${guests.length ? ` ${guests.join(", ")} ${guests.length > 1 ? "rate as guests and aren't" : "rates as a guest and isn't"} in the rotation.` : ""}`
+    : "";
 }
 
 const sorters = {
@@ -586,19 +766,29 @@ function renderWatched({ C, watched }) {
   if (rated.length) {
     const best = rated.reduce((a, b) => (b.avg > a.avg ? b : a));
     const worst = rated.reduce((a, b) => (b.avg < a.avg ? b : a));
-    $("watched-sub").textContent = `Top rated so far: ${best.title} (${best.avg.toFixed(1)}). Bottom: ${worst.title} (${worst.avg.toFixed(1)}).`;
+    $("watched-sub").textContent = `Top rated so far: ${best.title} (${best.avg.toFixed(1)}). Bottom: ${worst.title} (${worst.avg.toFixed(1)}). Tap a film to see everyone's take${me && canReview ? " and add yours" : ""}.`;
   } else $("watched-sub").textContent = "";
-  $("yours-h").hidden = !me;
+
+  const sortTh = (k, label) => `<th><button type="button" data-sort="${k}"${k === sortKey ? ` aria-sort="${sortDir === 1 ? "ascending" : "descending"}"` : ""}>${label}</button></th>`;
+  $("watched-head").innerHTML = `<th class="rank">#</th>${sortTh("title", "Film")}${sortTh("avg", "Club rating")}${me ? "<th>Your rating</th>" : ""}${sortTh("date", "Watched")}${sortTh("picker", "Picked by")}${sortTh("runtime", "Runtime")}<th>Genre</th><th>Link</th>`;
+  const cols = me ? 9 : 8;
   const mi = C.indexOf(me);
   const rows = [...watched].sort((a, b) => sorters[sortKey](a, b) * sortDir);
   $("watched-body").innerHTML = rows.map((f, i) => {
+    const open = openFilms.has(f.date);
     const mine = mi >= 0 ? f.vals[mi] : 0;
+    const nReviews = Object.keys(f.reviews).length;
     const rate = `<td><span class="rate" role="group" aria-label="Your rating for ${esc(f.title)}">${[1, 2, 3, 4, 5].map(n =>
       `<button type="button" class="${n <= mine ? "on" : ""}" data-act="rate" data-id="${f.date}" data-v="${n}" aria-label="${n} star${n > 1 ? "s" : ""}" aria-pressed="${n === mine}">★</button>`).join("")}</span></td>`;
+    const poster = posterImg(f);
     return `
-    <tr>
+    <tr id="row-${f.date}" class="${open ? "open" : ""}">
       <td class="rank num">${i + 1}</td>
-      <td class="title-cell">${esc(f.title)}${f.director ? `<small>${esc(f.director)}</small>` : ""}</td>
+      <td class="title-cell">
+        <button class="film-toggle ${poster ? "" : "no-thumb"}" type="button" data-act="expand" data-id="${f.date}" aria-expanded="${open}">
+          ${poster}<span><b>${esc(f.title)}</b><small>${esc(f.director || "")}${nReviews ? ` · ${plural(nReviews, "review")}` : ""}</small></span>
+        </button>
+      </td>
       <td>${f.avg != null ? `<span class="score">${stars(f.avg)}<span class="num">${f.avg.toFixed(1)}</span></span>` : `<span class="muted">No ratings yet</span>`}</td>
       ${me ? rate : ""}
       <td class="num">${fmt(f.date, { month: "short", day: "numeric" })}</td>
@@ -606,20 +796,39 @@ function renderWatched({ C, watched }) {
       <td class="num">${runtime(f.mins)}</td>
       <td>${esc(f.genre)}</td>
       <td>${f.imdb ? `<a href="${imdbUrl(esc(f.imdb))}" target="_blank" rel="noopener">IMDb</a>` : ""}</td>
-    </tr>`;
+    </tr>
+    ${open ? `<tr class="detail" id="detail-${f.date}"><td colspan="${cols}">${renderDetail(f, C)}</td></tr>` : ""}`;
   }).join("");
-  document.querySelectorAll("th button[data-sort]").forEach(b => {
-    if (b.dataset.sort === sortKey) b.setAttribute("aria-sort", sortDir === 1 ? "ascending" : "descending");
-    else b.removeAttribute("aria-sort");
-  });
+}
+
+function renderDetail(f, C) {
+  const entries = C.filter(c => f.ratings[c]).map(c => ({ name: c, score: f.ratings[c], text: f.reviews[c]?.text || "" }))
+    .sort((a, b) => b.score - a.score || a.name.localeCompare(b.name));
+  const list = entries.length
+    ? `<ul class="detail-takes">${entries.map(e => `<li><span class="name">${esc(e.name)}</span>${stars(e.score)}<span class="text ${e.text ? "" : "muted"}">${e.text ? esc(e.text) : canReview ? "No review" : ""}</span></li>`).join("")}</ul>`
+    : `<p class="muted" style="margin:0">Nobody has rated this yet.</p>`;
+  let form = "";
+  if (me && canReview) {
+    const mine = f.ratings[me];
+    const val = drafts[f.date] ?? f.reviews[me]?.text ?? "";
+    form = mine
+      ? `<div class="review-form">
+           <input id="review-${f.date}" data-review="${f.date}" maxlength="200" placeholder="Your one-line take on ${esc(f.title)}" value="${esc(val)}" aria-label="Your review of ${esc(f.title)}">
+           <button class="btn small primary" type="button" data-act="review" data-id="${f.date}">Save review</button>
+         </div>`
+      : `<p class="muted" style="margin:12px 0 0">Give it stars first, then you can add a review.</p>`;
+  }
+  const poster = posterImg(f);
+  return `<div class="detail-grid ${poster ? "" : "no-poster"}">${poster ? `<div>${poster}</div>` : ""}<div>${list}${form}</div></div>`;
 }
 
 const shade = v => `background: color-mix(in oklab, var(--accent) ${12 + (v - 1) * 20}%, var(--surface)); color: ${v >= 4 ? "var(--on-accent)" : "var(--fg)"}`;
 function renderGrid({ C, watched }) {
   $("legend").innerHTML = [1, 2, 3, 4, 5].map(v => `<span class="chip"><i style="${shade(v)}"></i>${v}</span>`).join("") + `<span class="chip">· = didn't rate</span>`;
+  const rows = [...watched].sort((a, b) => b.date.localeCompare(a.date));
   $("grid").innerHTML = `
     <thead><tr><th class="film">Film</th>${C.map(c => `<th class="${c === me ? "me-col" : ""}">${esc(c)}</th>`).join("")}<th>Avg</th></tr></thead>
-    <tbody>${watched.map(f => `
+    <tbody>${rows.map(f => `
       <tr><th class="film" scope="row">${esc(f.title)}</th>
         ${f.vals.map(v => v ? `<td style="${shade(v)}">${v}</td>` : `<td class="blank" aria-label="not rated">·</td>`).join("")}
         <td class="avg">${f.avg != null ? f.avg.toFixed(1) : "–"}</td></tr>`).join("")}
@@ -654,44 +863,62 @@ function renderMembers({ C, watched }) {
     </article>`).join("");
 }
 
-function renderRules({ next }) {
-  const order = pickOrder();
-  const up = next ? next.picker : "";
-  $("order").innerHTML = order.map((m, i) => `<li class="${m === up ? "up" : ""}"><span class="n">${i + 1}</span><span class="who">${esc(m)}</span></li>`).join("");
-  const guests = critics().filter(c => !order.includes(c));
-  $("order-note").textContent = next
-    ? `${next.picker} has the current pick.${guests.length ? ` ${guests.join(", ")} ${guests.length > 1 ? "rate as guests and aren't" : "rates as a guest and isn't"} in the rotation.` : ""}`
-    : "";
-  const titleOf = d => (slots.find(s => s.date === d) || {}).title || fmt(d, { month: "short", day: "numeric" });
-  const sorted = [...vetoes].sort((a, b) => b.created_at.localeCompare(a.created_at));
-  $("vetoes").innerHTML = sorted.length
-    ? sorted.map(v => `<li><span>${esc(titleOf(v.slot))}${v.member ? ` <span class="muted">· ${esc(v.member)}</span>` : ""}</span><span class="num muted">${fmtTs(v.created_at, { month: "short", day: "numeric" })}</span></li>`).join("")
-    : `<li class="muted">No vetoes yet.</li>`;
-}
-
 /* ---------- interactions ---------- */
 $("sched-toggle").addEventListener("click", () => { showAll = !showAll; render(); });
-document.querySelectorAll("th button[data-sort]").forEach(b => b.addEventListener("click", () => {
+$("watched-head").addEventListener("click", e => {
+  const b = e.target.closest("[data-sort]"); if (!b) return;
   const k = b.dataset.sort;
   if (k === sortKey) sortDir = -sortDir;
-  else { sortKey = k; sortDir = (k === "avg" || k === "runtime") ? -1 : 1; }
+  else { sortKey = k; sortDir = (k === "avg" || k === "runtime" || k === "date") ? -1 : 1; }
   render();
-}));
+});
+document.addEventListener("input", e => { const d = e.target.dataset && e.target.dataset.review; if (d) drafts[d] = e.target.value; });
+document.addEventListener("keydown", e => {
+  const d = e.target.dataset && e.target.dataset.review;
+  if (d && e.key === "Enter") { e.preventDefault(); saveReview(d); }
+});
+
+function gotoFilm(date) {
+  openFilms.add(date);
+  setTab("ratings");
+  render();
+  const row = $("row-" + date);
+  if (row) {
+    row.scrollIntoView({ block: "center", behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" });
+    row.classList.remove("flash"); void row.offsetWidth; row.classList.add("flash");
+  }
+}
+
+function saveReview(date) {
+  const slot = slots.find(s => s.date === date); if (!slot) return;
+  const input = $("review-" + date);
+  const text = (input ? input.value : drafts[date] || "").trim();
+  if (!slot.ratings[me]) { toast("Give it stars first."); return; }
+  write(() => sb.from("ratings").update({ review: text || null, updated_at: new Date().toISOString() }).eq("slot", date).eq("member", me),
+    text ? "Review saved" : "Review removed").then(ok => { if (ok) delete drafts[date]; });
+}
 
 document.addEventListener("click", e => {
   const b = e.target.closest("[data-act]");
   if (!b || !slots) return;
+  const act = b.dataset.act;
+  if (act === "goto-tab") return setTab(b.dataset.id);
   const slot = slots.find(s => s.date === b.dataset.id);
   if (!slot) return;
-  const act = b.dataset.act;
+  if (act === "goto") return gotoFilm(slot.date);
+  if (act === "expand") {
+    openFilms.has(slot.date) ? openFilms.delete(slot.date) : openFilms.add(slot.date);
+    return render();
+  }
   if (act === "edit") return me ? openEditor(slot) : openLogin();
+  if (act === "review") return saveReview(slot.date);
   if (act === "rate") {
     const v = +b.dataset.v;
     const nv = slot.ratings[me] === v ? 0 : v; // tap your current rating again to clear it
     write(() => nv
       ? sb.from("ratings").upsert({ slot: slot.date, member: me, score: nv, updated_at: new Date().toISOString() })
       : sb.from("ratings").delete().eq("slot", slot.date).eq("member", me),
-      nv ? `Rated ${slot.title} ${nv}★` : `Cleared your rating for ${slot.title}`);
+      nv ? `Rated ${slot.title} ${nv}★` : `Cleared your ${slot.reviews[me] ? "rating and review" : "rating"} for ${slot.title}`);
     return;
   }
   if (act === "veto") {
@@ -704,7 +931,7 @@ document.addEventListener("click", e => {
   }
   if (act === "watched") {
     write(() => sb.from("slots").update({ watched: true }).eq("date", slot.date),
-      `${slot.title} moved to Already watched. Rate it below.`);
+      `${slot.title} moved to the Ratings tab. Rate it there.`);
   }
 });
 
@@ -753,13 +980,46 @@ async function setSession(s) {
     me = data ? data.name : null;
   }
   render();
+  if (me) backfillPosters();
+}
+
+/* ---------- posters and film details (OMDb) ---------- */
+const omdbCache = new Map();
+async function omdb(id) {
+  if (!OMDB_KEY) return null;
+  if (omdbCache.has(id)) return omdbCache.get(id);
+  try {
+    const res = await fetch(`https://www.omdbapi.com/?i=${encodeURIComponent(id)}&apikey=${encodeURIComponent(OMDB_KEY)}`);
+    const j = await res.json();
+    const out = j.Response === "True" ? j : null;
+    omdbCache.set(id, out);
+    return out;
+  } catch (e) { return null; }
+}
+const omdbPoster = j => j && j.Poster && j.Poster.startsWith("https://") ? j.Poster : "none";
+
+// Fill in posters the database doesn't have yet. Runs once per page load for a logged-in member.
+let backfilled = false;
+async function backfillPosters() {
+  if (backfilled || !OMDB_KEY || !canPoster || !slots) return;
+  backfilled = true;
+  const todo = slots.filter(s => s.imdb && !s.poster);
+  let changed = 0;
+  for (const s of todo) {
+    const j = await omdb(s.imdb);
+    if (!j) continue;
+    const { error } = await sb.from("slots").update({ poster: omdbPoster(j) }).eq("date", s.date).is("poster", null);
+    if (!error) changed++;
+  }
+  if (changed) scheduleReload();
 }
 
 /* ---------- editor ---------- */
-let editing = null;
+let editing = null, editorPoster;
 const dlg = $("editor");
 function openEditor(slot) {
   editing = slot;
+  editorPoster = undefined;
   $("picker-list").innerHTML = pickOrder().map(p => `<option value="${esc(p)}">`).join("");
   $("editor-h").textContent = slot.title ? "Edit screening" : "Add the film";
   $("editor-when").textContent = `${fmt(slot.date, { weekday: "long", month: "long", day: "numeric", year: "numeric" })} · ${slot.picker}'s pick`;
@@ -772,9 +1032,29 @@ function openEditor(slot) {
   $("f-watched").checked = !!slot.watched;
   $("editor-clear").hidden = !slot.title;
   $("editor-error").hidden = true;
+  $("imdb-help").textContent = OMDB_KEY ? "Paste the film's IMDb link and the details below fill in." : "Paste the film's IMDb page link.";
   openDialog(dlg);
-  $("f-title").focus();
+  $("f-imdb").focus();
 }
+let imdbTimer;
+$("f-imdb").addEventListener("input", () => {
+  clearTimeout(imdbTimer);
+  imdbTimer = setTimeout(async () => {
+    const m = $("f-imdb").value.match(/tt\d{5,10}/);
+    if (!m || !OMDB_KEY) return;
+    if (editing && m[0] !== editing.imdb) editorPoster = null;
+    $("imdb-help").textContent = "Looking up the film…";
+    const j = await omdb(m[0]);
+    if (!j) { $("imdb-help").textContent = "Couldn't find that film's details. Fill them in below."; return; }
+    // Replace details when the link points at a different film; otherwise only fill blanks.
+    const fresh = !editing || m[0] !== editing.imdb;
+    const set = (id, v) => { if (v && v !== "N/A" && (fresh || !$(id).value.trim())) $(id).value = v; };
+    set("f-title", j.Title); set("f-director", j.Director); set("f-genre", j.Genre);
+    const mins = parseInt(j.Runtime, 10); if (mins > 0) set("f-mins", String(mins));
+    editorPoster = omdbPoster(j);
+    $("imdb-help").textContent = `Filled in from IMDb: ${j.Title}${j.Year ? ` (${j.Year})` : ""}.`;
+  }, 400);
+});
 function formError(msg) { const el = $("editor-error"); el.textContent = msg; el.hidden = false; }
 $("editor-form").addEventListener("submit", e => {
   e.preventDefault();
@@ -791,12 +1071,18 @@ $("editor-form").addEventListener("submit", e => {
   const watched = $("f-watched").checked;
   if (watched && !title) return formError("Add the film's title before marking it watched.");
   const date = editing.date;
+  const imdb = m ? m[0] : null;
   const data = {
     title: title || null,
     director: $("f-director").value.trim() || null,
     genre: $("f-genre").value.trim() || null,
-    mins, imdb: m ? m[0] : null, picker, watched
+    mins, imdb, picker, watched
   };
+  if (canPoster) {
+    if (!imdb) data.poster = null;
+    else if (editorPoster !== undefined) data.poster = editorPoster;
+    else if (imdb !== editing.imdb) data.poster = null; // backfill picks it up later
+  }
   closeDialog(dlg);
   write(() => sb.from("slots").update(data).eq("date", date), "Saved");
 });
@@ -804,8 +1090,9 @@ $("editor-clear").addEventListener("click", () => {
   if (!editing) return;
   const date = editing.date;
   closeDialog(dlg);
-  write(() => sb.from("slots").update({ title: null, director: null, genre: null, mins: null, imdb: null, watched: false }).eq("date", date),
-    "Film cleared from that date");
+  const data = { title: null, director: null, genre: null, mins: null, imdb: null, watched: false };
+  if (canPoster) data.poster = null;
+  write(() => sb.from("slots").update(data).eq("date", date), "Film cleared from that date");
 });
 
 /* ---------- boot ---------- */
@@ -830,6 +1117,7 @@ $("editor-clear").addEventListener("click", () => {
     .on("postgres_changes", { event: "*", schema: "public", table: "vetoes" }, scheduleReload)
     .subscribe();
   document.addEventListener("visibilitychange", () => { if (!document.hidden) scheduleReload(); });
+  window.addEventListener("hashchange", () => setTab(location.hash.slice(1)));
 })();
 </script>
 </body>

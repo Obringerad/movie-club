@@ -5,5 +5,7 @@ window.MOVIE_CLUB = {
   supabaseUrl: "https://odzpsnbcztjhmqofwljv.supabase.co",
   supabaseAnonKey: "sb_publishable_94ikJzCE7WqgNnuF3UNk_Q_qpL7JpPZ",
   // Login names map to these addresses. No email is ever sent to them.
-  emailDomain: "movieclub.com"
+  emailDomain: "movieclub.com",
+  // Free key from omdbapi.com, for posters and filling in film details from an IMDb link.
+  omdbApiKey: "PASTE_OMDB_KEY_HERE"
 };
