@@ -686,7 +686,7 @@ footer { color: var(--muted); font-size: 13px; text-align: center; padding-top: 
       <span class="label">Runtime format</span>
       <div class="seg" role="group" aria-label="Runtime format" id="runtime-format" style="justify-self:start">
         <button type="button" data-format="min">135 min</button>
-        <button type="button" data-format="hm">2h15m</button>
+        <button type="button" data-format="hm">2h 15m</button>
       </div>
     </div>
     <fieldset class="palettes" id="palettes"></fieldset>
@@ -808,11 +808,11 @@ const fmt = (iso, opts) => new Date(dayNum(iso) * 864e5).toLocaleDateString("en-
 const fmtTs = (ts, opts) => new Date(ts).toLocaleDateString("en-US", opts);
 const today = (() => { const n = new Date(); return Date.UTC(n.getFullYear(), n.getMonth(), n.getDate()) / 864e5; })();
 const mean = a => a.length ? a.reduce((x, y) => x + y, 0) / a.length : null;
-let runtimeFormat = "min";            // "min" (135 min) or "hm" (2h15m), saved per browser
+let runtimeFormat = "min";            // "min" (135 min) or "hm" (2h 15m), saved per browser
 try { if (localStorage.getItem("jboiz-runtime") === "hm") runtimeFormat = "hm"; } catch (e) {}
 const runtime = m => {
   if (!m) return "";
-  if (runtimeFormat === "hm") { const h = Math.floor(m / 60), r = m % 60; return h ? `${h.toLocaleString()}h${r ? `${r}m` : ""}` : `${r}m`; }
+  if (runtimeFormat === "hm") { const h = Math.floor(m / 60), r = m % 60; return h ? `${h.toLocaleString()}h${r ? ` ${r}m` : ""}` : `${r}m`; }
   return m >= 600 ? `${Math.round(m / 60).toLocaleString()} hr` : `${m} min`;
 };
 const imdbUrl = id => `https://www.imdb.com/title/${id}/`;
