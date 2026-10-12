@@ -420,9 +420,10 @@ dialog h3 { margin: 0; font-family: var(--font-display); font-weight: 400; font-
 .sticker .st-del { top: -12px; right: -12px; min-width: 26px; height: 26px; padding: 0 8px; border-radius: 13px; place-items: center; font: inherit; font-size: 13px; font-weight: 700; border: 0; cursor: pointer; background: var(--fg); color: var(--bg); box-shadow: 0 2px 6px rgb(0 0 0 / .4); }
 .sticker .st-del.confirm { background: var(--danger); color: #fff; }
 .sticker .st-resize { right: -8px; bottom: -8px; width: 18px; height: 18px; border-radius: 4px; background: var(--accent); border: 2px solid var(--bg); cursor: nwse-resize; touch-action: none; }
-/* Party switch: top-right corner of the marquee */
+/* Party corner: switch (and Add image when it's on) in the marquee's top-right corner */
+.party-corner { position: absolute; top: 18px; right: 18px; z-index: 1; display: flex; flex-wrap: wrap; justify-content: flex-end; align-items: center; gap: 8px; max-width: calc(100% - 36px); }
+.party-add { font-size: 12px; padding: 4px 12px; border-radius: 999px; }
 .party-switch {
-  position: absolute; top: 18px; right: 18px; z-index: 1;
   display: inline-flex; align-items: center; gap: 8px; padding: 4px 6px 4px 10px;
   font: inherit; font-stretch: 75%; font-weight: 700; text-transform: uppercase; letter-spacing: .1em; font-size: 12px;
   color: var(--muted); background: var(--bg); border: 1px solid var(--line); border-radius: 999px; cursor: pointer;
@@ -433,7 +434,7 @@ dialog h3 { margin: 0; font-family: var(--font-display); font-weight: 400; font-
 .party-switch[aria-checked="true"] { color: var(--fg); border-color: var(--accent); }
 .party-switch[aria-checked="true"] .track { background: var(--accent); border-color: var(--accent); }
 .party-switch[aria-checked="true"] .thumb { transform: translateX(14px); background: var(--on-accent); }
-@media (max-width: 640px) { .party-switch { top: 14px; right: 12px; } .marquee { padding-top: 48px; } }
+@media (max-width: 640px) { .party-corner { top: 14px; right: 12px; } .marquee { padding-top: 52px; } }
 .confetti { position: fixed; inset: 0; width: 100vw; height: 100vh; z-index: 40; pointer-events: none; }
 @media (prefers-reduced-motion: reduce) { .party-switch .track, .party-switch .thumb { transition: none; } }
 .party-drop { position: fixed; inset: 0; z-index: 30; display: grid; place-items: center; background: rgb(0 0 0 / .55); color: #fff; font-family: var(--font-display); font-size: 28px; pointer-events: none; }
@@ -468,9 +469,12 @@ footer { color: var(--muted); font-size: 13px; text-align: center; padding-top: 
 <main class="page">
   <div class="party-layer" id="party-layer" hidden></div>
   <header class="marquee">
-    <button class="party-switch" type="button" role="switch" id="party-switch" aria-checked="false" hidden>
-      <span>Party mode</span><span class="track" aria-hidden="true"><span class="thumb"></span></span>
-    </button>
+    <div class="party-corner" id="party-corner" hidden>
+      <button class="btn primary party-add" type="button" id="party-add" hidden>Add image</button>
+      <button class="party-switch" type="button" role="switch" id="party-switch" aria-checked="false">
+        <span>Party mode</span><span class="track" aria-hidden="true"><span class="thumb"></span></span>
+      </button>
+    </div>
     <span class="label">Now showing at</span>
     <h1><a class="home-link" href="./" id="home-link">JBOIZ Movie Club</a></h1>
     <div class="tagline" id="tagline"></div>
@@ -514,6 +518,13 @@ footer { color: var(--muted); font-size: 13px; text-align: center; padding-top: 
           <h2 id="sched-h">Coming up</h2>
           <button class="btn primary" type="button" id="pick-next" hidden>Pick your next movie</button>
           <p>Two screenings a week. Picks rotate in the pick order below. Log in to fill in your film.</p>
+        </div>
+        <div class="watch-controls" id="sched-controls" hidden>
+          <div class="seg" role="group" aria-label="Show dates" id="sched-filter">
+            <button type="button" data-filter="all">All dates</button>
+            <button type="button" data-filter="mine">My picks</button>
+          </div>
+          <span class="watch-count" id="sched-count"></span>
         </div>
         <ul class="schedule" id="schedule"></ul>
         <button class="btn" id="sched-toggle" type="button" style="justify-self:start"></button>
@@ -745,6 +756,7 @@ let showAll = false;
 let sortMode = "newest";              // newest | highest | lowest | az
 let onlyUnrated = false;              // "Not rated by me" filter
 let criticsSort = "me";               // me | highest | lowest | rated | missed | az
+let schedFilter = "all";              // all | mine
 let tab = "next";
 const openFilms = new Set();          // expanded rows in the watched table
 const drafts = {};                    // unsaved review text, by film date
@@ -853,8 +865,7 @@ setTab(location.hash.slice(1), { scroll: false });
 
 /* ---------- render ---------- */
 function renderAccount() {
-  const settingsBtn = (canParty && party && me ? `<button class="btn small primary" type="button" id="btn-add-image">Add image</button>` : "") +
-    `<button class="link-btn" type="button" id="btn-settings">Settings</button>`;
+  const settingsBtn = `<button class="link-btn" type="button" id="btn-settings">Settings</button>`;
   $("account").innerHTML = (me
     ? `<span>Logged in as <span class="me">${esc(me)}</span></span>
        <button class="link-btn" type="button" id="btn-passwd">Change password</button>
@@ -863,7 +874,6 @@ function renderAccount() {
       ? `<span class="muted">This login isn't linked to a club member yet.</span><button class="link-btn" type="button" id="btn-logout">Log out</button>`
       : `<button class="btn primary small" type="button" id="btn-login">Log in to rate and pick</button>`) + settingsBtn;
   $("btn-settings").addEventListener("click", openSettings);
-  $("btn-add-image")?.addEventListener("click", () => $("party-file").click());
   $("btn-login")?.addEventListener("click", openLogin);
   $("btn-logout")?.addEventListener("click", async () => { await sb.auth.signOut(); toast("Logged out"); });
   $("btn-passwd")?.addEventListener("click", () => { $("passwd-form").reset(); $("passwd-error").hidden = true; openDialog($("passwd")); $("p-new").focus(); });
@@ -983,7 +993,18 @@ const SHOWN = 12;
 const RATE_WITHIN_DAYS = 7;
 function renderSchedule({ upcoming }) {
   const later = upcoming.slice(1);
-  const list = showAll ? later : later.slice(0, SHOWN);
+  // "My picks": every upcoming date that's yours (the next screening included), all at once.
+  const mineOnly = schedFilter === "mine" && !!me;
+  const mine = upcoming.filter(f => isPicker(f, me));
+  $("sched-controls").hidden = !me;
+  $("sched-filter").querySelectorAll("[data-filter]").forEach(b => b.setAttribute("aria-pressed", b.dataset.filter === (mineOnly ? "mine" : "all") ? "true" : "false"));
+  $("sched-count").textContent = mineOnly ? `${plural(mine.length, "pick")} coming up · ${mine.filter(f => !f.title).length} still to choose` : "";
+  const list = mineOnly ? mine : showAll ? later : later.slice(0, SHOWN);
+  if (mineOnly && !list.length) {
+    $("schedule").innerHTML = `<li class="muted">You don't have any upcoming picks on the calendar.</li>`;
+    $("sched-toggle").hidden = true;
+    return;
+  }
   $("schedule").innerHTML = list.map(f => `
     <li class="slot ${isPicker(f, me) ? "mine" : ""}">
       <div class="date"><div class="m">${fmt(f.date, { month: "short" })}</div><div class="d">${fmt(f.date, { day: "numeric" })}</div></div>
@@ -997,7 +1018,7 @@ function renderSchedule({ upcoming }) {
       <div>${posterImg(f)}</div>
     </li>`).join("");
   const tog = $("sched-toggle");
-  tog.hidden = later.length <= SHOWN;
+  tog.hidden = mineOnly || later.length <= SHOWN;
   if (later.length) tog.textContent = showAll ? "Show fewer dates" : `Show all ${later.length} dates through ${fmt(later[later.length - 1].date, { month: "short", year: "numeric" })}`;
 }
 
@@ -1265,7 +1286,8 @@ function renderParty() {
   if (!layer) return;
   const on = canParty && party;
   const sw = $("party-switch");
-  sw.hidden = !canParty;
+  $("party-corner").hidden = !canParty;
+  $("party-add").hidden = !(on && me);
   sw.setAttribute("aria-checked", on ? "true" : "false");
   document.body.classList.toggle("party-on", on);
   layer.hidden = !on;
@@ -1287,13 +1309,14 @@ function renderParty() {
     </div>`).join("");
 }
 
+$("party-add").addEventListener("click", () => $("party-file").click());
 $("party-switch").addEventListener("click", () => {
   party = !party;
   try { localStorage.setItem("jboiz-party", party ? "on" : "off"); } catch (e) {}
   render();
   if (party) {
     confetti($("party-switch"));
-    if (me) toast("Party mode on. Add images with the button, paste them, or drop them on the page.");
+    if (me) toast("Party mode on. Add images with the button up top, paste them, or drop them on the page.");
   }
 });
 let partyResize;
@@ -1591,6 +1614,11 @@ addEventListener("scroll", hidePop, { passive: true });
 
 /* ---------- interactions ---------- */
 $("sched-toggle").addEventListener("click", () => { showAll = !showAll; render(); });
+$("sched-filter").addEventListener("click", e => {
+  const b = e.target.closest("[data-filter]"); if (!b) return;
+  schedFilter = b.dataset.filter;
+  render();
+});
 $("takes-more").addEventListener("click", () => { takesShown += TAKES_STEP; render(); });
 $("takes-less").addEventListener("click", () => {
   takesShown = TAKES_STEP;
