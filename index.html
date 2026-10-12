@@ -203,6 +203,16 @@ section { display: grid; gap: 16px; min-width: 0; }
 .take .who { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; font-weight: 700; }
 .take .film { font-size: 13px; color: var(--muted); }
 .take q { font-size: 16px; quotes: "“" "”"; overflow-wrap: anywhere; }
+.take .foot { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+.votes { display: inline-flex; align-items: center; gap: 2px; border: 1px solid var(--line); border-radius: 999px; padding: 1px; flex: none; }
+.votes button { font: inherit; font-size: 13px; line-height: 1; width: 28px; height: 26px; border: 0; border-radius: 999px; background: none; color: var(--muted); cursor: pointer; }
+.votes button:hover:not([disabled]) { color: var(--fg); background: var(--sunk); }
+.votes button[disabled] { cursor: default; opacity: .45; }
+.votes button.up[aria-pressed="true"] { color: #0d1f14; background: #8fd694; }
+.votes button.down[aria-pressed="true"] { color: #1a0a08; background: #e74c3c; }
+.votes .net { min-width: 22px; text-align: center; font-family: var(--font-data); font-size: 13px; font-weight: 500; }
+.votes .net.pos { color: var(--fg); }
+.votes .net.neg { color: var(--danger); }
 
 /* Schedule */
 .schedule { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 10px; }
@@ -501,7 +511,13 @@ footer { color: var(--muted); font-size: 13px; text-align: center; padding-top: 
       <section aria-labelledby="takes-h" id="takes-section">
         <div class="section-head">
           <h2 id="takes-h">Latest takes</h2>
-          <p>What people said with their stars. Add yours from the Ratings tab.</p>
+          <p>What people said with their stars. Add yours from the Ratings tab, and vote on everyone else's.</p>
+        </div>
+        <div class="watch-controls" id="takes-controls" hidden>
+          <div class="seg" role="group" aria-label="Sort takes" id="takes-sort">
+            <button type="button" data-sort="newest">Newest</button>
+            <button type="button" data-sort="top">Top</button>
+          </div>
         </div>
         <ul class="takes" id="takes"></ul>
         <div class="actions">
@@ -763,6 +779,9 @@ const drafts = {};                    // unsaved review text, by film date
 let canReview = false, canPoster = false; // database has the review / poster columns
 let canMiss = false;                  // database has the absences table
 let canParty = false;                 // database has the stickers table
+let canVote = false;                  // database has the review_votes table
+let votes = new Map();                // "slot|author" -> {up, down, mine}
+let takesSort = "newest";             // newest | top
 let stickers = [];                    // [{id, path, tab, x, y, w, z, added_by}]
 let party = false;                    // this viewer's party mode switch (saved per browser)
 try { party = localStorage.getItem("jboiz-party") === "on"; } catch (e) {}
@@ -773,18 +792,28 @@ const pickOrder = () => members.filter(m => m.pick_order != null).sort((a, b) =>
 
 /* ---------- data ---------- */
 async function load() {
-  const [m, s, r, a, st] = await Promise.all([
+  const [m, s, r, a, st, rv] = await Promise.all([
     sb.from("members").select("name, pick_order").order("pick_order", { nullsFirst: false }),
     sb.from("slots").select("*").order("date"),
     sb.from("ratings").select("*"),
     sb.from("absences").select("*"),
-    sb.from("stickers").select("*").order("z")
+    sb.from("stickers").select("*").order("z"),
+    sb.from("review_votes").select("slot, author, voter, value")
   ]);
   const err = m.error || s.error || r.error;
   if (err) throw err;
   canMiss = !a.error; // the absences table may not exist yet
   canParty = !st.error;
   stickers = st.data || [];
+  canVote = !rv.error;
+  votes = new Map();
+  (rv.data || []).forEach(v => {
+    const k = `${v.slot}|${v.author}`;
+    const e = votes.get(k) || { up: 0, down: 0, by: {} };
+    if (v.value > 0) e.up++; else e.down++;
+    e.by[v.voter] = v.value;
+    votes.set(k, e);
+  });
   members = m.data;
   canPoster = s.data.length > 0 && "poster" in s.data[0];
   canReview = r.data.length > 0 && "review" in r.data[0];
@@ -971,8 +1000,13 @@ let takesShown = TAKES_STEP;
 function renderTakes({ watched }) {
   const all = [];
   watched.forEach(f => Object.entries(f.reviews).forEach(([name, r]) => all.push({ f, name, ...r, score: f.ratings[name] })));
-  all.sort((a, b) => (b.at || "").localeCompare(a.at || ""));
+  const tally = t => votes.get(`${t.f.date}|${t.name}`) || { up: 0, down: 0, by: {} };
+  all.forEach(t => { const v = tally(t); t.up = v.up; t.down = v.down; t.net = v.up - v.down; t.myVote = me ? v.by[me] || 0 : 0; });
+  const newest = (a, b) => (b.at || "").localeCompare(a.at || "");
+  all.sort(takesSort === "top" && canVote ? (a, b) => b.net - a.net || b.up - a.up || newest(a, b) : newest);
   $("takes-section").hidden = !canReview;
+  $("takes-controls").hidden = !canVote || all.length < 2;
+  $("takes-sort").querySelectorAll("[data-sort]").forEach(b => b.setAttribute("aria-pressed", b.dataset.sort === takesSort ? "true" : "false"));
   const shown = Math.min(takesShown, all.length);
   const left = all.length - shown;
   $("takes-more").hidden = left <= 0;
@@ -984,9 +1018,23 @@ function renderTakes({ watched }) {
       <li class="take">
         <div class="who"><span>${esc(t.name)}</span>${t.score ? stars(t.score) : ""}</div>
         <q>${esc(t.text)}</q>
-        <button class="link-btn film" type="button" data-act="goto" data-id="${t.f.date}">on ${esc(t.f.title)}</button>
+        <div class="foot">
+          <button class="link-btn film" type="button" data-act="goto" data-id="${t.f.date}">on ${esc(t.f.title)}</button>
+          ${canVote ? voteControl(t) : ""}
+        </div>
       </li>`).join("")
     : `<li class="muted">No reviews yet. After the next screening, open a film in the Ratings tab and add a line with your stars.</li>`;
+}
+
+// ▲ score ▼ for a review. You can't vote on your own; logged-out viewers see the score only.
+function voteControl(t) {
+  const own = t.name === me, off = !me || own;
+  const tip = !me ? "Log in to vote" : own ? "You can't vote on your own take" : "";
+  return `<span class="votes" role="group" aria-label="Votes for ${esc(t.name)}'s take"${tip ? ` title="${tip}"` : ""}>
+    <button type="button" class="up" data-vote="1" data-slot="${t.f.date}" data-author="${esc(t.name)}" aria-label="Upvote" aria-pressed="${t.myVote === 1}"${off ? " disabled" : ""}>▲</button>
+    <span class="net num ${t.net > 0 ? "pos" : t.net < 0 ? "neg" : ""}" title="${t.up} up · ${t.down} down">${t.net > 0 ? "+" : ""}${t.net}</span>
+    <button type="button" class="down" data-vote="-1" data-slot="${t.f.date}" data-author="${esc(t.name)}" aria-label="Downvote" aria-pressed="${t.myVote === -1}"${off ? " disabled" : ""}>▼</button>
+  </span>`;
 }
 
 const SHOWN = 12;
@@ -1619,6 +1667,26 @@ $("sched-filter").addEventListener("click", e => {
   schedFilter = b.dataset.filter;
   render();
 });
+$("takes-sort").addEventListener("click", e => {
+  const b = e.target.closest("[data-sort]"); if (!b) return;
+  takesSort = b.dataset.sort; takesShown = TAKES_STEP;
+  render();
+});
+// Vote: tap an arrow to vote, tap it again to take the vote back.
+$("takes").addEventListener("click", e => {
+  const b = e.target.closest("[data-vote]"); if (!b || b.disabled) return;
+  if (!me) return openLogin();
+  const slot = b.dataset.slot, author = b.dataset.author, value = +b.dataset.vote;
+  const k = `${slot}|${author}`, e0 = votes.get(k) || { up: 0, down: 0, by: {} };
+  const prev = e0.by[me] || 0, next = prev === value ? 0 : value;
+  // Show it straight away; the live refresh confirms it.
+  const e1 = { up: e0.up - (prev > 0) + (next > 0), down: e0.down - (prev < 0) + (next < 0), by: { ...e0.by, [me]: next || undefined } };
+  if (!next) delete e1.by[me];
+  votes.set(k, e1); render();
+  write(() => next
+    ? sb.from("review_votes").upsert({ slot, author, voter: me, value: next })
+    : sb.from("review_votes").delete().eq("slot", slot).eq("author", author).eq("voter", me));
+});
 $("takes-more").addEventListener("click", () => { takesShown += TAKES_STEP; render(); });
 $("takes-less").addEventListener("click", () => {
   takesShown = TAKES_STEP;
@@ -1986,6 +2054,7 @@ $("editor-clear").addEventListener("click", () => {
     .on("postgres_changes", { event: "*", schema: "public", table: "ratings" }, scheduleReload)
     .on("postgres_changes", { event: "*", schema: "public", table: "absences" }, scheduleReload)
     .on("postgres_changes", { event: "*", schema: "public", table: "stickers" }, scheduleReload)
+    .on("postgres_changes", { event: "*", schema: "public", table: "review_votes" }, scheduleReload)
     .subscribe();
   document.addEventListener("visibilitychange", () => { if (!document.hidden) scheduleReload(); });
   window.addEventListener("hashchange", () => setTab(location.hash.slice(1)));
