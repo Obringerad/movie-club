@@ -126,7 +126,12 @@ section { display: grid; gap: 16px; min-width: 0; }
 .home-link:hover { filter: brightness(1.12); }
 .marquee .tagline { display: flex; flex-wrap: wrap; justify-content: center; gap: 4px 18px; color: var(--muted); }
 .marquee .tagline b { color: var(--fg); font-weight: 600; }
-.account { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 8px 14px; margin-top: 4px; font-size: 14px; }
+/* Top-left corner of the marquee: who's logged in. Lines up with the party switch on the right. */
+.account { position: absolute; top: 22px; left: 18px; z-index: 11; display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; min-height: 30px; font-size: 13px; text-align: left; max-width: calc(50% - 24px); }
+.account .btn { padding: 4px 12px; border-radius: 999px; font-size: 12px; }
+.gear-btn { display: inline-grid; place-items: center; width: 30px; height: 30px; padding: 0; border-radius: 50%; border: 1px solid var(--line); background: var(--bg); color: var(--muted); cursor: pointer; }
+.gear-btn:hover { color: var(--fg); border-color: var(--accent); }
+.gear-btn svg { width: 17px; height: 17px; }
 .account .me { font-weight: 700; }
 
 /* Your turn */
@@ -476,7 +481,15 @@ dialog h3 { margin: 0; font-family: var(--font-display); font-weight: 400; font-
 .party-switch[aria-checked="true"] { color: var(--fg); border-color: var(--accent); }
 .party-switch[aria-checked="true"] .track { background: var(--accent); border-color: var(--accent); }
 .party-switch[aria-checked="true"] .thumb { transform: translateX(14px); background: var(--on-accent); }
-@media (max-width: 640px) { .party-corner { top: 22px; right: 12px; } .marquee { padding-top: 60px; } }
+@media (max-width: 640px) {
+  .party-corner { top: 16px; right: 12px; }
+  .account { top: 16px; left: 12px; font-size: 12px; max-width: calc(100% - 200px); }
+  /* Narrow screens: just the switch, its label kept for screen readers. */
+  .party-switch { padding: 4px; }
+  .party-switch > span:first-child { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+  .party-add { padding: 4px 10px; }
+  .marquee { padding-top: 64px; }
+}
 .confetti { position: fixed; inset: 0; width: 100vw; height: 100vh; z-index: 40; pointer-events: none; }
 @media (prefers-reduced-motion: reduce) { .party-switch .track, .party-switch .thumb { transition: none; } }
 .party-drop { position: fixed; inset: 0; z-index: 30; display: grid; place-items: center; background: rgb(0 0 0 / .55); color: #fff; font-family: var(--font-display); font-size: 28px; pointer-events: none; }
@@ -512,16 +525,19 @@ footer { color: var(--muted); font-size: 13px; text-align: center; padding-top: 
 <main class="page">
   <div class="party-layer" id="party-layer" hidden></div>
   <header class="marquee">
-    <div class="party-corner" id="party-corner" hidden>
+    <div class="account" id="account"></div>
+    <div class="party-corner" id="party-corner">
       <button class="btn primary party-add" type="button" id="party-add" hidden>Add image</button>
-      <button class="party-switch" type="button" role="switch" id="party-switch" aria-checked="false">
+      <button class="party-switch" type="button" role="switch" id="party-switch" aria-checked="false" hidden>
         <span>Party mode</span><span class="track" aria-hidden="true"><span class="thumb"></span></span>
+      </button>
+      <button class="gear-btn" type="button" id="btn-settings" aria-label="Settings" title="Settings">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
       </button>
     </div>
     <span class="label">Now showing at</span>
     <h1><a class="home-link" href="./" id="home-link">JBOIZ Movie Club</a></h1>
     <div class="tagline" id="tagline"></div>
-    <div class="account" id="account"></div>
   </header>
 
   <div class="turn" id="turn" hidden></div>
@@ -985,14 +1001,12 @@ setTab(location.hash.slice(1), { scroll: false });
 
 /* ---------- render ---------- */
 function renderAccount() {
-  const settingsBtn = `<button class="link-btn" type="button" id="btn-settings">Settings</button>`;
-  $("account").innerHTML = (me
+  $("account").innerHTML = me
     ? `<span>Logged in as <span class="me">${esc(me)}</span></span>
        <button class="link-btn" type="button" id="btn-logout">Log out</button>`
     : session
-      ? `<span class="muted">This login isn't linked to a club member yet.</span><button class="link-btn" type="button" id="btn-logout">Log out</button>`
-      : `<button class="btn primary small" type="button" id="btn-login">Log in to rate and pick</button>`) + settingsBtn;
-  $("btn-settings").addEventListener("click", openSettings);
+      ? `<span class="muted">Login not linked to a member.</span><button class="link-btn" type="button" id="btn-logout">Log out</button>`
+      : `<button class="btn primary small" type="button" id="btn-login">Log in</button>`;
   $("btn-login")?.addEventListener("click", openLogin);
   $("btn-logout")?.addEventListener("click", async () => { await sb.auth.signOut(); toast("Logged out"); });
 
@@ -1467,7 +1481,7 @@ function renderParty() {
   if (!layer) return;
   const on = canParty && party;
   const sw = $("party-switch");
-  $("party-corner").hidden = !canParty;
+  sw.hidden = !canParty;
   $("party-add").hidden = !(on && me);
   sw.setAttribute("aria-checked", on ? "true" : "false");
   document.body.classList.toggle("party-on", on);
@@ -1491,6 +1505,7 @@ function renderParty() {
 }
 
 $("party-add").addEventListener("click", () => $("party-file").click());
+$("btn-settings").addEventListener("click", openSettings);
 $("party-switch").addEventListener("click", () => {
   party = !party;
   try { localStorage.setItem("jboiz-party", party ? "on" : "off"); } catch (e) {}
