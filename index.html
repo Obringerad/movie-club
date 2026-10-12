@@ -401,6 +401,11 @@ footer { color: var(--muted); font-size: 13px; text-align: center; padding-top: 
           <p>What people said with their stars. Add yours from the Ratings tab.</p>
         </div>
         <ul class="takes" id="takes"></ul>
+        <div class="actions">
+          <button class="btn" type="button" id="takes-more" hidden></button>
+          <button class="btn" type="button" id="takes-less" hidden>Show less</button>
+          <span class="muted" id="takes-count" style="font-size:13px"></span>
+        </div>
       </section>
       <div class="box">
         <h3>Veto log</h3>
@@ -804,13 +809,21 @@ function renderTicket({ next }) {
     </div>`;
 }
 
+const TAKES_STEP = 6;
+let takesShown = TAKES_STEP;
 function renderTakes({ watched }) {
   const all = [];
   watched.forEach(f => Object.entries(f.reviews).forEach(([name, r]) => all.push({ f, name, ...r, score: f.ratings[name] })));
   all.sort((a, b) => (b.at || "").localeCompare(a.at || ""));
   $("takes-section").hidden = !canReview;
+  const shown = Math.min(takesShown, all.length);
+  const left = all.length - shown;
+  $("takes-more").hidden = left <= 0;
+  $("takes-more").textContent = `Show ${Math.min(TAKES_STEP, left)} more`;
+  $("takes-less").hidden = shown <= TAKES_STEP;
+  $("takes-count").textContent = all.length > TAKES_STEP ? `Showing ${shown} of ${all.length}` : "";
   $("takes").innerHTML = all.length
-    ? all.slice(0, 6).map(t => `
+    ? all.slice(0, shown).map(t => `
       <li class="take">
         <div class="who"><span>${esc(t.name)}</span>${t.score ? stars(t.score) : ""}</div>
         <q>${esc(t.text)}</q>
@@ -1105,6 +1118,12 @@ addEventListener("scroll", hidePop, { passive: true });
 
 /* ---------- interactions ---------- */
 $("sched-toggle").addEventListener("click", () => { showAll = !showAll; render(); });
+$("takes-more").addEventListener("click", () => { takesShown += TAKES_STEP; render(); });
+$("takes-less").addEventListener("click", () => {
+  takesShown = TAKES_STEP;
+  render();
+  $("takes-section").scrollIntoView({ block: "start", behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" });
+});
 $("watched-head").addEventListener("click", e => {
   const b = e.target.closest("[data-sort]"); if (!b) return;
   const k = b.dataset.sort;
