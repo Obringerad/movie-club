@@ -1124,8 +1124,8 @@ function voteControl(t) {
   const key = `${t.f.date}|${t.name}`;
   const cls = `net num ${t.net > 0 ? "pos" : t.net < 0 ? "neg" : ""}`;
   const score = `${t.net > 0 ? "+" : ""}${t.net}`;
-  // On your own take with votes, the score opens a list of who voted.
-  const canSee = own && (t.up + t.down) > 0;
+  // On any take with votes, hovering the score shows who voted.
+  const canSee = (t.up + t.down) > 0;
   let net = `<span class="${cls}" title="${t.up} up · ${t.down} down">${score}</span>`, pop = "";
   if (canSee) {
     const open = openVoters === key;
