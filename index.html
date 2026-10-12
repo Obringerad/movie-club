@@ -1036,7 +1036,7 @@ function renderTagline({ ordered, watched }) {
   $("tagline").innerHTML = [
     `<span><b>${pickOrder().length}</b> members</span>`,
     `<span><b>${watched.length}</b> films watched</span>`,
-    `<span><b class="num">${Math.floor(totalMins / 60)}h ${totalMins % 60}m</b> of screen time</span>`,
+    `<span><b class="num">${Math.floor(totalMins / 60)}h ${totalMins % 60}m</b>&nbsp; of screen time</span>`,
     clubAvg != null ? `<span>Club average <b class="num">${clubAvg.toFixed(2)}</b></span>` : "",
     `<span>Since ${fmt(ordered[0].date, { month: "short", day: "numeric", year: "numeric" })}</span>`
   ].join("");
