@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>JBOIZ Movie Club</title>
-<meta name="description" content="The JBOIZ Movie Club: next screening, schedule, ratings and vetoes.">
+<meta name="description" content="The JBOIZ Movie Club: next screening, schedule, ratings and reviews.">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect x='1' y='1' width='30' height='30' rx='6' fill='%234a1424' stroke='%23f2b544' stroke-width='2'/%3E%3Ctext x='16' y='23' font-size='18' text-anchor='middle' fill='%23f2b544' font-family='Arial Black,sans-serif'%3EJ%3C/text%3E%3C/svg%3E">
 <script>
   // Apply the saved palette before the page paints, so it never flashes the default.
@@ -15,7 +15,7 @@
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bungee&family=Archivo:wdth,wght@62..125,400..800&family=DM+Mono:wght@400;500&display=swap">
 <style>
 /* Layout: a cinema lobby. Marquee header, a "your turn" bar for the logged-in member, then pinned tabs:
-   Next up (ticket, latest takes, vetoes) · Schedule (program, pick order) · Ratings (watched table, grid) · Critics. */
+   Next up (ticket, latest takes) · Schedule (program, pick order) · Ratings (watched table, grid) · Critics. */
 :root {
   /* Charcoal: the default palette */
   --bg: #1c1d20;
@@ -315,9 +315,6 @@ tr.detail > td { background: var(--sunk); padding: 10px 12px 16px 10px; white-sp
 .order li.up { background: var(--accent); color: var(--on-accent); }
 .order .n { font-family: var(--font-data); font-size: 12px; opacity: .75; }
 .order .who { font-weight: 700; }
-.veto-list { margin: 0; padding: 0; list-style: none; display: grid; gap: 8px; }
-.veto-list li { display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap; padding-bottom: 8px; border-bottom: 1px solid var(--line); }
-.veto-list li:last-child { border-bottom: 0; padding-bottom: 0; }
 
 /* Dialogs */
 dialog { border: 1px solid var(--line); border-radius: 10px; background: var(--surface); color: var(--fg); padding: 0; width: min(520px, calc(100vw - 32px)); }
@@ -387,7 +384,7 @@ footer { color: var(--muted); font-size: 13px; text-align: center; padding-top: 
     <button class="tab" role="tab" id="tab-critics" aria-controls="panel-critics" data-tab="critics">Critics</button>
   </nav>
 
-  <div class="status" id="status"><strong>Loading the club's schedule…</strong>Screenings, ratings and vetoes are on their way.</div>
+  <div class="status" id="status"><strong>Loading the club's schedule…</strong>Screenings and ratings are on their way.</div>
 
   <div id="content" hidden>
     <div class="panel" role="tabpanel" id="panel-next" aria-labelledby="tab-next">
@@ -407,11 +404,6 @@ footer { color: var(--muted); font-size: 13px; text-align: center; padding-top: 
           <span class="muted" id="takes-count" style="font-size:13px"></span>
         </div>
       </section>
-      <div class="box">
-        <h3>Veto log</h3>
-        <ul class="veto-list" id="vetoes"></ul>
-        <p>Any member can veto the next movie from its ticket above.</p>
-      </div>
     </div>
 
     <div class="panel" role="tabpanel" id="panel-schedule" aria-labelledby="tab-schedule" hidden>
@@ -463,7 +455,7 @@ footer { color: var(--muted); font-size: 13px; text-align: center; padding-top: 
     </div>
   </div>
 
-  <footer>Anyone with the link can look. Log in to rate, review, pick and veto. Posters and film details from OMDb.</footer>
+  <footer>Anyone with the link can look. Log in to rate, review and pick. Posters and film details from OMDb.</footer>
 </main>
 
 <dialog id="login" class="narrow" aria-labelledby="login-h">
@@ -597,7 +589,6 @@ document.querySelectorAll("dialog [data-close]").forEach(b => b.addEventListener
 let sb = null;
 let members = [];   // [{name, pick_order}]
 let slots = null;   // [{date, title, ..., poster, ratings: {name: score}, reviews: {name: {text, at}}, missed: Set<name>}]
-let vetoes = [];    // [{id, slot, member, created_at}]
 let me = null;      // logged-in member's name, or null
 let session = null;
 let showAll = false;
@@ -613,14 +604,13 @@ const pickOrder = () => members.filter(m => m.pick_order != null).sort((a, b) =>
 
 /* ---------- data ---------- */
 async function load() {
-  const [m, s, r, v, a] = await Promise.all([
+  const [m, s, r, a] = await Promise.all([
     sb.from("members").select("name, pick_order").order("pick_order", { nullsFirst: false }),
     sb.from("slots").select("*").order("date"),
     sb.from("ratings").select("*"),
-    sb.from("vetoes").select("id, slot, member, created_at"),
     sb.from("absences").select("*")
   ]);
-  const err = m.error || s.error || r.error || v.error;
+  const err = m.error || s.error || r.error;
   if (err) throw err;
   canMiss = !a.error; // the absences table may not exist yet
   members = m.data;
@@ -634,7 +624,6 @@ async function load() {
     if (x.review) sl.reviews[x.member] = { text: x.review, at: x.updated_at };
   });
   slots = [...byDate.values()];
-  vetoes = v.data;
 }
 let reloadTimer;
 function scheduleReload() {
@@ -710,7 +699,7 @@ function renderAccount() {
        <button class="link-btn" type="button" id="btn-logout">Log out</button>`
     : session
       ? `<span class="muted">This login isn't linked to a club member yet.</span><button class="link-btn" type="button" id="btn-logout">Log out</button>`
-      : `<button class="btn primary small" type="button" id="btn-login">Log in to rate, pick and veto</button>`) + settingsBtn;
+      : `<button class="btn primary small" type="button" id="btn-login">Log in to rate and pick</button>`) + settingsBtn;
   $("btn-settings").addEventListener("click", openSettings);
   $("btn-login")?.addEventListener("click", openLogin);
   $("btn-logout")?.addEventListener("click", async () => { await sb.auth.signOut(); toast("Logged out"); });
@@ -727,7 +716,7 @@ function render() {
   if (!slots.length) return showStatus("No screenings on the calendar yet.", "Once the club's schedule is added it shows up here.");
   $("status").hidden = true; $("content").hidden = false;
   const D = derive();
-  renderTagline(D); renderTurn(D); renderTicket(D); renderTakes(D); renderVetoes();
+  renderTagline(D); renderTurn(D); renderTicket(D); renderTakes(D);
   renderSchedule(D); renderOrder(D); renderWatched(D); renderGrid(D); renderMembers(D);
 
   if (popFor && !popFor.isConnected) hidePop();
@@ -770,12 +759,6 @@ function renderTicket({ next }) {
   if (!next) { $("ticket").innerHTML = `<div class="ticket-main"><p class="muted">Every date on the calendar has been watched.</p></div>`; return; }
   const diff = dayNum(next.date) - today;
   const countdown = diff === 0 ? "Tonight" : diff === 1 ? "Tomorrow" : diff > 1 ? `In ${diff} days` : `Scheduled ${plural(-diff, "day")} ago`;
-  const nv = vetoes.filter(v => v.slot === next.date);
-  const named = nv.filter(v => v.member).map(v => v.member);
-  const mine = me && named.includes(me);
-  const vetoPill = nv.length
-    ? `<span class="pill warn">${plural(nv.length, "veto")}${named.length ? ` · ${esc(named.join(", "))}` : ""}</span>`
-    : `<span class="pill go">No vetoes · it's on</span>`;
   const poster = posterImg(next);
   $("ticket").className = "ticket" + (poster ? " has-poster" : "");
   $("ticket").innerHTML = `
@@ -791,12 +774,8 @@ function renderTicket({ next }) {
                <div><dt>Picked by</dt><dd>${esc(next.picker)}</dd></div>
              </dl>`
           : `<h3 class="title tba">Pick not in yet</h3><p class="muted" style="margin:0">It's ${esc(next.picker)}'s turn to choose.</p>`}
-        <div class="actions">
-          ${next.imdb ? `<a class="btn primary" href="${imdbUrl(esc(next.imdb))}" target="_blank" rel="noopener">View on IMDb ↗</a>` : ""}
-          ${vetoPill}
-        </div>
+        ${next.imdb ? `<div class="actions"><a class="btn primary" href="${imdbUrl(esc(next.imdb))}" target="_blank" rel="noopener">View on IMDb ↗</a></div>` : ""}
         ${me ? `<div class="actions">
-          ${next.title ? `<button class="btn small" type="button" data-act="veto" data-id="${next.date}">${mine ? "Withdraw my veto" : "Veto this movie"}</button>` : ""}
           ${next.title ? `<button class="btn small" type="button" data-act="watched" data-id="${next.date}">Mark as watched</button>` : ""}
           <button class="btn small" type="button" data-act="edit" data-id="${next.date}">${next.title ? "Edit" : "Add the film"}</button>
         </div>` : ""}
@@ -830,14 +809,6 @@ function renderTakes({ watched }) {
         <button class="link-btn film" type="button" data-act="goto" data-id="${t.f.date}">on ${esc(t.f.title)}</button>
       </li>`).join("")
     : `<li class="muted">No reviews yet. After the next screening, open a film in the Ratings tab and add a line with your stars.</li>`;
-}
-
-function renderVetoes() {
-  const titleOf = d => (slots.find(s => s.date === d) || {}).title || fmt(d, { month: "short", day: "numeric" });
-  const sorted = [...vetoes].sort((a, b) => b.created_at.localeCompare(a.created_at));
-  $("vetoes").innerHTML = sorted.length
-    ? sorted.map(v => `<li><span>${esc(titleOf(v.slot))}${v.member ? ` <span class="muted">· ${esc(v.member)}</span>` : ""}</span><span class="num muted">${fmtTs(v.created_at, { month: "short", day: "numeric" })}</span></li>`).join("")
-    : `<li class="muted">No vetoes yet.</li>`;
 }
 
 const SHOWN = 12;
@@ -1188,14 +1159,6 @@ document.addEventListener("click", e => {
       nv ? `Rated ${slot.title} ${nv}★` : `Cleared your ${slot.reviews[me] ? "rating and review" : "rating"} for ${slot.title}`);
     return;
   }
-  if (act === "veto") {
-    const mine = vetoes.some(v => v.slot === slot.date && v.member === me);
-    write(() => mine
-      ? sb.from("vetoes").delete().eq("slot", slot.date).eq("member", me)
-      : sb.from("vetoes").insert({ slot: slot.date, member: me }),
-      mine ? "Veto withdrawn" : `Vetoed ${slot.title}`);
-    return;
-  }
   if (act === "watched") {
     write(() => sb.from("slots").update({ watched: true }).eq("date", slot.date),
       `${slot.title} moved to the Ratings tab. Rate it there.`);
@@ -1381,7 +1344,6 @@ $("editor-clear").addEventListener("click", () => {
   sb.channel("club")
     .on("postgres_changes", { event: "*", schema: "public", table: "slots" }, scheduleReload)
     .on("postgres_changes", { event: "*", schema: "public", table: "ratings" }, scheduleReload)
-    .on("postgres_changes", { event: "*", schema: "public", table: "vetoes" }, scheduleReload)
     .on("postgres_changes", { event: "*", schema: "public", table: "absences" }, scheduleReload)
     .subscribe();
   document.addEventListener("visibilitychange", () => { if (!document.hidden) scheduleReload(); });

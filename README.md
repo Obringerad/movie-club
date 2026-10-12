@@ -1,10 +1,10 @@
 # JBOIZ Movie Club
 
-The club's site: next screening, schedule, ratings, pick order and vetoes.
-Anyone with the link can look. Members log in with their name and a password to rate films, fill in their picks, mark films watched and veto.
+The club's site: next screening, schedule, ratings, reviews and pick order.
+Anyone with the link can look. Members log in with their name and a password to rate films, fill in their picks, mark films watched and record screenings they missed.
 
 - **Site:** `index.html` (+ `config.js`), hosted on GitHub Pages.
-- **Data and logins:** a free Supabase project. Access rules live in `supabase/schema.sql`: members can only change their own ratings and vetoes.
+- **Data and logins:** a free Supabase project. Access rules live in `supabase/schema.sql`: members can only change their own ratings, reviews and missed screenings.
 
 ## One-time setup
 
