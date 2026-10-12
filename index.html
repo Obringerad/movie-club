@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>JBOIZ Movie Club</title>
 <meta name="description" content="The JBOIZ Movie Club: next screening, schedule, ratings and reviews.">
-<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect x='1' y='1' width='30' height='30' rx='6' fill='%234a1424' stroke='%23f2b544' stroke-width='2'/%3E%3Ctext x='16' y='23' font-size='18' text-anchor='middle' fill='%23f2b544' font-family='Arial Black,sans-serif'%3EJ%3C/text%3E%3C/svg%3E">
+<link rel="icon" id="favicon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect x='1' y='1' width='30' height='30' rx='6' fill='%234a1424' stroke='%23f2b544' stroke-width='2'/%3E%3Ctext x='16' y='23' font-size='18' text-anchor='middle' fill='%23f2b544' font-family='Arial Black,sans-serif'%3EJ%3C/text%3E%3C/svg%3E">
 <script>
   // Apply the saved palette before the page paints, so it never flashes the default.
   try {
@@ -1694,7 +1694,26 @@ function applyPalette(id) {
   }
   try { localStorage.setItem("jboiz-palette", id); } catch (e) {}
   syncCustomEditor();
+  updateFavicon();
 }
+
+// The tab icon follows your palette: [tile, border and letter].
+const FAVICONS = {
+  charcoal: ["#2b2d31", "#f2b544"],
+  velvet: ["#4a1424", "#f2b544"],
+  midnight: ["#18213a", "#8cc8ff"],
+  noir: ["#111111", "#ffffff"],
+  "drive-in": ["#152b2b", "#ff7a59"],
+  popcorn: ["#fbf6e9", "#c8361d"],
+  arthouse: ["#eef0ec", "#2f6b4f"]
+};
+function updateFavicon() {
+  const cur = currentPalette(), custom = activeCustom();
+  const [tile, ink] = custom ? [custom.base.surface, custom.base.display] : FAVICONS[cur] || FAVICONS.charcoal;
+  const svg = `<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect x='1' y='1' width='30' height='30' rx='6' fill='${tile}' stroke='${ink}' stroke-width='2'/><text x='16' y='23' font-size='18' text-anchor='middle' fill='${ink}' font-family='Arial Black,sans-serif'>J</text></svg>`;
+  $("favicon").href = "data:image/svg+xml," + encodeURIComponent(svg);
+}
+updateFavicon();
 function syncCustomEditor() {
   const entry = activeCustom();
   $("custom-editor").hidden = !entry;
@@ -1768,6 +1787,7 @@ $("custom-editor").addEventListener("input", e => {
   const entry = updateActive({ base: { ...cur.base, [key]: e.target.value } });
   setCustomVars(entry.base);
   syncCustomEditor();
+  updateFavicon();
 });
 $("custom-reset").addEventListener("click", () => { const e = updateActive({ base: { ...CHARCOAL } }); if (e) { setCustomVars(e.base); syncCustomEditor(); } });
 $("custom-delete").addEventListener("click", () => {
