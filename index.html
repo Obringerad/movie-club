@@ -234,6 +234,9 @@ tr.detail > td { background: var(--sunk); padding: 10px 12px 16px 10px; white-sp
 .detail-takes li { display: grid; grid-template-columns: 80px auto minmax(0, 1fr); gap: 10px; align-items: baseline; }
 .detail-takes .name { font-weight: 700; }
 .detail-takes .text { overflow-wrap: anywhere; }
+.missed-line { margin: 10px 0 0; font-size: 14px; color: var(--muted); }
+.missed-line b { color: var(--fg); font-weight: 600; }
+.attend { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 12px; font-size: 14px; }
 .review-form { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-top: 12px; }
 .review-form input { font: inherit; flex: 1 1 240px; min-width: 0; padding: 7px 10px; border-radius: 6px; border: 1px solid var(--line); background: var(--surface); color: var(--fg); }
 .rank { color: var(--muted); width: 1%; }
@@ -257,6 +260,7 @@ tr.detail > td { background: var(--sunk); padding: 10px 12px 16px 10px; white-sp
 .grid-table th.film { text-align: left; padding: 6px 12px; font-weight: 600; white-space: nowrap; background: var(--surface); position: sticky; left: 0; z-index: 1; }
 .grid-table td { width: 52px; min-width: 44px; height: 34px; font-family: var(--font-data); font-variant-numeric: tabular-nums; font-size: 14px; }
 .grid-table td.blank { color: var(--muted); opacity: .5; }
+.grid-table td.missed { color: var(--muted); font-family: var(--font-body); font-stretch: 75%; font-weight: 700; font-size: 11px; letter-spacing: .08em; text-transform: uppercase; background: repeating-linear-gradient(-45deg, transparent 0 5px, color-mix(in oklab, var(--line) 60%, transparent) 5px 6px); }
 .grid-table td.avg { font-weight: 500; background: var(--sunk); width: 64px; }
 .grid-table th.me-col { color: var(--fg); text-decoration: underline; text-decoration-color: var(--accent); text-underline-offset: 4px; }
 .legend { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 14px; color: var(--muted); font-size: 13px; }
@@ -560,7 +564,7 @@ document.querySelectorAll("dialog [data-close]").forEach(b => b.addEventListener
 /* ---------- state ---------- */
 let sb = null;
 let members = [];   // [{name, pick_order}]
-let slots = null;   // [{date, title, ..., poster, ratings: {name: score}, reviews: {name: {text, at}}}]
+let slots = null;   // [{date, title, ..., poster, ratings: {name: score}, reviews: {name: {text, at}}, missed: Set<name>}]
 let vetoes = [];    // [{id, slot, member, created_at}]
 let me = null;      // logged-in member's name, or null
 let session = null;
@@ -570,24 +574,28 @@ let tab = "next";
 const openFilms = new Set();          // expanded rows in the watched table
 const drafts = {};                    // unsaved review text, by film date
 let canReview = false, canPoster = false; // database has the review / poster columns
+let canMiss = false;                  // database has the absences table
 
 const critics = () => members.map(m => m.name);
 const pickOrder = () => members.filter(m => m.pick_order != null).sort((a, b) => a.pick_order - b.pick_order).map(m => m.name);
 
 /* ---------- data ---------- */
 async function load() {
-  const [m, s, r, v] = await Promise.all([
+  const [m, s, r, v, a] = await Promise.all([
     sb.from("members").select("name, pick_order").order("pick_order", { nullsFirst: false }),
     sb.from("slots").select("*").order("date"),
     sb.from("ratings").select("*"),
-    sb.from("vetoes").select("id, slot, member, created_at")
+    sb.from("vetoes").select("id, slot, member, created_at"),
+    sb.from("absences").select("slot, member")
   ]);
   const err = m.error || s.error || r.error || v.error;
   if (err) throw err;
+  canMiss = !a.error; // the absences table may not exist yet
   members = m.data;
   canPoster = s.data.length > 0 && "poster" in s.data[0];
   canReview = r.data.length > 0 && "review" in r.data[0];
-  const byDate = new Map(s.data.map(x => [x.date, { ...x, ratings: {}, reviews: {} }]));
+  const byDate = new Map(s.data.map(x => [x.date, { ...x, ratings: {}, reviews: {}, missed: new Set() }]));
+  (a.data || []).forEach(x => byDate.get(x.slot)?.missed.add(x.member));
   r.data.forEach(x => {
     const sl = byDate.get(x.slot); if (!sl) return;
     sl.ratings[x.member] = x.score;
@@ -705,7 +713,7 @@ function renderTurn({ watched, upcoming }) {
   const el = $("turn");
   if (!me) { el.hidden = true; return; }
   const parts = [];
-  const unrated = watched.filter(f => !f.ratings[me]).sort((a, b) => b.date.localeCompare(a.date));
+  const unrated = watched.filter(f => !f.ratings[me] && !f.missed.has(me)).sort((a, b) => b.date.localeCompare(a.date));
   if (unrated.length) {
     const shown = unrated.slice(0, 3);
     parts.push(`<span class="item"><span>Rate:</span>${shown.map(f => `<button class="chip-btn" type="button" data-act="goto" data-id="${f.date}">${esc(f.title)}</button>`).join("")}${unrated.length > 3 ? `<button class="link-btn" type="button" data-act="goto-tab" data-id="ratings">+${unrated.length - 3} more</button>` : ""}</span>`);
@@ -850,7 +858,7 @@ function renderWatched({ C, watched }) {
       <td class="rank num">${i + 1}</td>
       <td class="title-cell">
         <button class="film-toggle ${poster ? "" : "no-thumb"}" type="button" data-act="expand" data-id="${f.date}" aria-expanded="${open}">
-          ${poster}<span><b>${esc(f.title)}</b><small>${esc(f.director || "")}${nReviews ? ` · ${plural(nReviews, "review")}` : ""}</small></span>
+          ${poster}<span><b>${esc(f.title)}</b><small>${esc(f.director || "")}${nReviews ? ` · ${plural(nReviews, "review")}` : ""}${f.missed.size ? ` · ${f.missed.size} missed` : ""}</small></span>
         </button>
       </td>
       <td>${f.avg != null ? `<span class="score">${stars(f.avg)}<span class="num">${f.avg.toFixed(1)}</span></span>` : `<span class="muted">No ratings yet</span>`}</td>
@@ -871,6 +879,14 @@ function renderDetail(f, C) {
   const list = entries.length
     ? `<ul class="detail-takes">${entries.map(e => `<li><span class="name">${esc(e.name)}</span>${stars(e.score)}<span class="text ${e.text ? "" : "muted"}">${e.text ? esc(e.text) : canReview ? "No review" : ""}</span></li>`).join("")}</ul>`
     : `<p class="muted" style="margin:0">Nobody has rated this yet.</p>`;
+  const missedNames = C.filter(c => f.missed.has(c));
+  const missedLine = missedNames.length ? `<p class="missed-line">Missed it: <b>${missedNames.map(esc).join(", ")}</b></p>` : "";
+  let attend = "";
+  if (me && canMiss) {
+    attend = f.missed.has(me)
+      ? `<div class="attend"><span class="muted">You missed this screening.</span><button class="link-btn" type="button" data-act="missed" data-id="${f.date}">I was there after all</button></div>`
+      : `<div class="attend"><button class="btn small" type="button" data-act="missed" data-id="${f.date}">I missed this one</button></div>`;
+  }
   let form = "";
   if (me && canReview) {
     const mine = f.ratings[me];
@@ -880,21 +896,23 @@ function renderDetail(f, C) {
            <input id="review-${f.date}" data-review="${f.date}" maxlength="200" placeholder="Your one-line take on ${esc(f.title)}" value="${esc(val)}" aria-label="Your review of ${esc(f.title)}">
            <button class="btn small primary" type="button" data-act="review" data-id="${f.date}">Save review</button>
          </div>`
-      : `<p class="muted" style="margin:12px 0 0">Give it stars first, then you can add a review.</p>`;
+      : f.missed.has(me) ? "" : `<p class="muted" style="margin:12px 0 0">Give it stars first, then you can add a review.</p>`;
   }
   const poster = posterImg(f);
-  return `<div class="detail-grid ${poster ? "" : "no-poster"}">${poster ? `<div>${poster}</div>` : ""}<div>${list}${form}</div></div>`;
+  return `<div class="detail-grid ${poster ? "" : "no-poster"}">${poster ? `<div>${poster}</div>` : ""}<div>${list}${missedLine}${form}${attend}</div></div>`;
 }
 
 const shade = v => `background: color-mix(in oklab, var(--accent) ${12 + (v - 1) * 20}%, var(--surface)); color: ${v >= 4 ? "var(--on-accent)" : "var(--fg)"}`;
 function renderGrid({ C, watched }) {
-  $("legend").innerHTML = [1, 2, 3, 4, 5].map(v => `<span class="chip"><i style="${shade(v)}"></i>${v}</span>`).join("") + `<span class="chip">· = didn't rate</span>`;
+  $("legend").innerHTML = [1, 2, 3, 4, 5].map(v => `<span class="chip"><i style="${shade(v)}"></i>${v}</span>`).join("") + `<span class="chip">· = didn't rate</span>` + (canMiss ? `<span class="chip">MISSED = wasn't there</span>` : "");
   const rows = [...watched].sort((a, b) => b.date.localeCompare(a.date));
   $("grid").innerHTML = `
     <thead><tr><th class="film">Film</th>${C.map(c => `<th class="${c === me ? "me-col" : ""}">${esc(c)}</th>`).join("")}<th>Avg</th></tr></thead>
     <tbody>${rows.map(f => `
       <tr><th class="film" scope="row">${esc(f.title)}</th>
-        ${f.vals.map(v => v ? `<td style="${shade(v)}">${v}</td>` : `<td class="blank" aria-label="not rated">·</td>`).join("")}
+        ${f.vals.map((v, i) => v ? `<td style="${shade(v)}">${v}</td>`
+          : f.missed.has(C[i]) ? `<td class="missed" title="${esc(C[i])} missed this screening">Missed</td>`
+          : `<td class="blank" aria-label="not rated">·</td>`).join("")}
         <td class="avg">${f.avg != null ? f.avg.toFixed(1) : "–"}</td></tr>`).join("")}
     </tbody>`;
 }
@@ -902,11 +920,12 @@ function renderGrid({ C, watched }) {
 function renderMembers({ C, watched }) {
   const listTitles = arr => arr.length > 2 ? `${esc(arr[0])} +${arr.length - 1} more` : arr.map(esc).join(", ");
   const cards = C.map((name, ci) => {
+    const missed = watched.filter(f => f.missed.has(name)).length;
     const rated = watched.filter(f => f.vals[ci] > 0).map(f => ({ f, v: f.vals[ci] }));
-    if (!rated.length) return { name, avg: null };
+    if (!rated.length) return { name, avg: null, missed };
     const top = Math.max(...rated.map(r => r.v)), low = Math.min(...rated.map(r => r.v));
     return {
-      name, count: rated.length, avg: mean(rated.map(r => r.v)), top, low,
+      name, count: rated.length, avg: mean(rated.map(r => r.v)), top, low, missed,
       favs: rated.filter(r => r.v === top).map(r => r.f.title),
       lows: rated.filter(r => r.v === low).map(r => r.f.title),
       delta: mean(rated.map(r => r.v - r.f.avg))
@@ -914,12 +933,13 @@ function renderMembers({ C, watched }) {
   }).sort((a, b) => (b.avg ?? -1) - (a.avg ?? -1));
   $("members").innerHTML = cards.map(c => c.avg == null ? `
     <article class="member"><header><span class="name">${esc(c.name)}</span><span class="avg muted">–</span></header>
-      <p class="muted" style="margin:0">No ratings yet.</p></article>` : `
+      <p class="muted" style="margin:0">No ratings yet.${canMiss && c.missed ? ` Missed ${plural(c.missed, "screening")}.` : ""}</p></article>` : `
     <article class="member">
       <header><span class="name">${esc(c.name)}</span><span class="avg">${c.avg.toFixed(2)}</span></header>
       <div class="bar" aria-hidden="true"><span style="width:${(c.avg / 5) * 100}%"></span></div>
       <dl>
         <dt>Films rated</dt><dd class="num">${c.count} of ${watched.length}</dd>
+        ${canMiss ? `<dt>Screenings missed</dt><dd class="num">${c.missed}</dd>` : ""}
         <dt>vs. the room</dt><dd class="num">${c.delta >= 0 ? "+" : "−"}${Math.abs(c.delta).toFixed(2)} ${c.delta >= 0.05 ? "kinder" : c.delta <= -0.05 ? "harsher" : "in step"}</dd>
         <dt>Top (${c.top}★)</dt><dd>${listTitles(c.favs)}</dd>
         <dt>Low (${c.low}★)</dt><dd>${listTitles(c.lows)}</dd>
@@ -1039,6 +1059,14 @@ document.addEventListener("click", e => {
   }
   if (act === "edit") return me ? openEditor(slot) : openLogin();
   if (act === "review") return saveReview(slot.date);
+  if (act === "missed") {
+    const was = slot.missed.has(me);
+    write(() => was
+      ? sb.from("absences").delete().eq("slot", slot.date).eq("member", me)
+      : sb.from("absences").insert({ slot: slot.date, member: me }),
+      was ? `Marked you as at ${slot.title}` : `Recorded that you missed ${slot.title}`);
+    return;
+  }
   if (act === "rate") {
     const v = +b.dataset.v;
     const nv = slot.ratings[me] === v ? 0 : v; // tap your current rating again to clear it
@@ -1242,6 +1270,7 @@ $("editor-clear").addEventListener("click", () => {
     .on("postgres_changes", { event: "*", schema: "public", table: "slots" }, scheduleReload)
     .on("postgres_changes", { event: "*", schema: "public", table: "ratings" }, scheduleReload)
     .on("postgres_changes", { event: "*", schema: "public", table: "vetoes" }, scheduleReload)
+    .on("postgres_changes", { event: "*", schema: "public", table: "absences" }, scheduleReload)
     .subscribe();
   document.addEventListener("visibilitychange", () => { if (!document.hidden) scheduleReload(); });
   window.addEventListener("hashchange", () => setTab(location.hash.slice(1)));
