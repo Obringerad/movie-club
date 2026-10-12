@@ -215,7 +215,7 @@ section { display: grid; gap: 16px; min-width: 0; }
 .votes button { font: inherit; font-size: 13px; line-height: 1; width: 28px; height: 26px; border: 0; border-radius: 999px; background: none; color: var(--muted); cursor: pointer; }
 .votes button:hover:not([disabled]) { color: var(--fg); background: var(--sunk); }
 .votes button[disabled] { cursor: default; opacity: .45; }
-.votes button.up[aria-pressed="true"] { color: #0d1f14; background: #8fd694; }
+.votes button.up[aria-pressed="true"] { color: #0d1f14; background: #6dd674; }
 .votes button.down[aria-pressed="true"] { color: #1a0a08; background: #e74c3c; }
 .votes .net { min-width: 22px; text-align: center; font-family: var(--font-data); font-size: 13px; font-weight: 500; }
 .votes .net.pos { color: var(--good); }
@@ -281,7 +281,7 @@ th button[aria-sort] { color: var(--fg); }
 .meter-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 14px; align-items: center; margin-top: 6px; }
 .meter {
   position: relative; height: 14px; border-radius: 999px; margin-inline: 12px;
-  background: linear-gradient(90deg, #e74c3c 0%, #f39c12 28%, #f4d03f 52%, #8fd694 76%, #34a853 100%);
+  background: linear-gradient(90deg, #e74c3c 0%, #f39c12 28%, #f4d03f 52%, #6dd674 76%, #34a853 100%);
   box-shadow: 0 0 0 4px var(--sunk), 0 0 0 5px var(--line);
 }
 .meter.empty { background: var(--sunk); }
@@ -1354,7 +1354,7 @@ function renderDetail(f, C) {
 // Rating colors (SeriesGraph style): [background, text, label]. Same in every palette.
 const RATING = {
   5: ["#34a853", "#000000", "Awesome"],
-  4: ["#8fd694", "#000000", "Great"],
+  4: ["#6dd674", "#000000", "Great"],
   3: ["#f4d03f", "#2a2205", "Good"],
   2: ["#f39c12", "#2a1802", "Average"],
   1: ["#e74c3c", "#1a0a08", "Bad"]
@@ -1560,7 +1560,7 @@ function confetti(from) {
   document.body.append(c);
   const ctx = c.getContext("2d"); ctx.scale(dpr, dpr);
   const b = from.getBoundingClientRect(), ox = b.left + b.width / 2, oy = b.top + b.height / 2;
-  const colors = ["#f2b544", "#e74c3c", "#f39c12", "#f4d03f", "#8fd694", "#34a853", "#8cc8ff", "#ffffff"];
+  const colors = ["#f2b544", "#e74c3c", "#f39c12", "#f4d03f", "#6dd674", "#34a853", "#8cc8ff", "#ffffff"];
   const bits = Array.from({ length: 140 }, () => {
     const a = Math.random() * Math.PI * 2, v = 4 + Math.random() * 9;
     return { x: ox, y: oy, vx: Math.cos(a) * v, vy: Math.sin(a) * v - 5, w: 5 + Math.random() * 6, h: 3 + Math.random() * 5,
