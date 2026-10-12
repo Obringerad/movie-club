@@ -417,6 +417,11 @@ dialog h3 { margin: 0; font-family: var(--font-display); font-weight: 400; font-
 .color-field input { width: 44px; height: 32px; padding: 0; border: 1px solid var(--line); border-radius: 6px; background: none; cursor: pointer; flex: none; }
 .color-field small { display: block; font-weight: 400; font-size: 12px; color: var(--muted); }
 .custom-warn { margin: 0; font-size: 13px; color: var(--danger); }
+.custom-share { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; padding-top: 10px; border-top: 1px solid var(--line); }
+.custom-import { display: flex; flex-wrap: wrap; gap: 8px; width: 100%; }
+.custom-import input { font: inherit; font-size: 14px; flex: 1 1 220px; min-width: 0; padding: 6px 10px; border-radius: 6px; border: 1px solid var(--line); background: var(--bg); color: var(--fg); }
+.custom-share .note { font-size: 13px; color: var(--muted); width: 100%; margin: 0; }
+.custom-share .note.err { color: var(--danger); }
 
 /* Party mode: images members drop on the page */
 /* Above everything on the page (tabs included); only messages, the poster preview and dialogs go higher. */
@@ -667,6 +672,15 @@ footer { color: var(--muted); font-size: 13px; text-align: center; padding-top: 
       </div>
       <p class="custom-warn" id="custom-warn" hidden></p>
       <button class="link-btn" type="button" id="custom-reset" style="justify-self:start">Start over from Charcoal</button>
+      <div class="custom-share">
+        <button class="btn small" type="button" id="custom-copy">Copy share link</button>
+        <button class="btn small" type="button" id="custom-import-open">Import a palette</button>
+        <div class="custom-import" id="custom-import" hidden>
+          <input id="custom-import-text" autocomplete="off" placeholder="Paste a share link or color code" aria-label="Share link or color code">
+          <button class="btn small primary" type="button" id="custom-import-go">Use it</button>
+        </div>
+        <p class="note" id="custom-share-note" aria-live="polite"></p>
+      </div>
     </div>
     <p class="muted" style="margin:0;font-size:13px">Your choice is saved on this device only and doesn't change the site for anyone else.</p>
     <div class="dialog-actions">
@@ -726,6 +740,8 @@ footer { color: var(--muted); font-size: 13px; text-align: center; padding-top: 
 const CFG = window.MOVIE_CLUB || {};
 const OMDB_KEY = CFG.omdbApiKey && !CFG.omdbApiKey.startsWith("PASTE") ? CFG.omdbApiKey : "";
 const TMDB_KEY = CFG.tmdbApiKey || "";
+// A palette shared by link (?palette=...). Read now, before the tab code rewrites the address.
+const SHARED_PALETTE = new URLSearchParams(location.search).get("palette");
 
 /* ---------- helpers ---------- */
 const $ = id => document.getElementById(id);
@@ -1639,6 +1655,61 @@ $("custom-editor").addEventListener("input", e => {
   syncCustomEditor();
 });
 $("custom-reset").addEventListener("click", () => { saveCustom({ ...CHARCOAL }); setCustomVars(CHARCOAL); syncCustomEditor(); });
+
+// Sharing: the five colors as a short code (bg-cards-text-accent-headings), carried in a link.
+const paletteCode = base => CUSTOM_KEYS.map(k => base[k].replace("#", "").toLowerCase()).join("-");
+function parsePalette(text) {
+  const hex = String(text || "").match(/[0-9a-f]{6}(?![0-9a-f])/gi);
+  if (!hex || hex.length < 5) return null;
+  // Take the last five, so a full link (whose address has no hex runs) or a bare code both work.
+  const five = hex.slice(-5).map(h => "#" + h.toLowerCase());
+  return Object.fromEntries(CUSTOM_KEYS.map((k, i) => [k, five[i]]));
+}
+function useCustomPalette(base) {
+  saveCustom(base);
+  applyPalette("custom");
+  if ($("settings").open) openSettings();
+}
+function shareNote(msg, err) { const n = $("custom-share-note"); n.textContent = msg; n.classList.toggle("err", !!err); }
+$("custom-copy").addEventListener("click", async () => {
+  const base = (loadCustom() || { base: currentColors() }).base;
+  const link = `${location.origin}${location.pathname}?palette=${paletteCode(base)}`;
+  try {
+    await navigator.clipboard.writeText(link);
+    shareNote("Link copied. Send it to the group; opening it offers your palette.");
+  } catch (e) {
+    // Clipboard blocked: show the link so it can be copied by hand.
+    $("custom-import").hidden = false;
+    $("custom-import-text").value = link;
+    $("custom-import-text").select();
+    shareNote("Copy the link above to share your palette.");
+  }
+});
+$("custom-import-open").addEventListener("click", () => {
+  $("custom-import").hidden = false;
+  $("custom-import-text").value = "";
+  shareNote("");
+  $("custom-import-text").focus();
+});
+function importPalette() {
+  const base = parsePalette($("custom-import-text").value);
+  if (!base) return shareNote("That doesn't look like a palette link or code. It should contain five colors like 1c1d20-26282c-ecebe8-f2b544-f2b544.", true);
+  useCustomPalette(base);
+  $("custom-import").hidden = true;
+  shareNote("Palette imported. It's now your Custom palette.");
+}
+$("custom-import-go").addEventListener("click", importPalette);
+$("custom-import-text").addEventListener("keydown", e => { if (e.key === "Enter") { e.preventDefault(); importPalette(); } });
+
+// Opening a shared link: offer the palette, then tidy the address.
+(() => {
+  const shared = SHARED_PALETTE;
+  if (!shared) return;
+  try { history.replaceState(null, "", location.pathname + location.hash); } catch (e) {}
+  const base = parsePalette(shared);
+  if (!base) return;
+  setTimeout(() => toast("Someone shared a color palette with you.", { label: "Use it", run: () => { useCustomPalette(base); toast("Palette applied. Change it any time in Settings."); } }), 600);
+})();
 $("settings-form").addEventListener("submit", e => { e.preventDefault(); closeDialog($("settings")); });
 
 /* ---------- poster preview on hover ---------- */
