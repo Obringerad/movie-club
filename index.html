@@ -433,7 +433,8 @@ dialog h3 { margin: 0; font-family: var(--font-display); font-weight: 400; font-
 .sticker .st-del.confirm { background: var(--danger); color: #fff; }
 .sticker .st-resize { right: -8px; bottom: -8px; width: 18px; height: 18px; border-radius: 4px; background: var(--accent); border: 2px solid var(--bg); cursor: nwse-resize; touch-action: none; }
 /* Party corner: switch (and Add image when it's on) in the marquee's top-right corner */
-.party-corner { position: absolute; top: 18px; right: 18px; z-index: 1; display: flex; flex-wrap: wrap; justify-content: flex-end; align-items: center; gap: 8px; max-width: calc(100% - 36px); }
+/* Above the party images (z-index 9) so the switch can always be reached. */
+.party-corner { position: absolute; top: 18px; right: 18px; z-index: 11; display: flex; flex-wrap: wrap; justify-content: flex-end; align-items: center; gap: 8px; max-width: calc(100% - 36px); }
 .party-add { font-size: 12px; padding: 4px 12px; border-radius: 999px; }
 .party-switch {
   display: inline-flex; align-items: center; gap: 8px; padding: 4px 6px 4px 10px;
