@@ -371,8 +371,12 @@ th button[aria-sort] { color: var(--fg); }
 .spread-pop .inner { width: max-content; min-width: 160px; max-width: 260px; max-height: 240px; overflow-y: auto; padding: 10px 12px; border-radius: 8px; border: 1px solid var(--line); background: var(--surface); box-shadow: 0 8px 24px rgb(0 0 0 / .35); font-size: 13px; text-align: left; }
 .spread-pop .h { margin-bottom: 6px; font-size: 11px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
 .spread-pop ul { margin: 0; padding: 0; list-style: none; display: grid; gap: 3px; }
-.spread-pop li { display: flex; justify-content: space-between; gap: 12px; }
-.spread-pop li span:last-child { color: var(--muted); white-space: nowrap; font-family: var(--font-data); font-size: 12px; }
+.spread-pop .inner { max-width: 320px; }
+.spread-pop ul { grid-template-columns: minmax(0, 1fr) auto auto; gap: 4px 10px; align-items: baseline; }
+.spread-pop li { display: contents; }
+.spread-pop .dt { color: var(--muted); white-space: nowrap; font-family: var(--font-data); font-size: 12px; }
+.spread-pop .club { white-space: nowrap; font-family: var(--font-data); font-size: 12px; color: var(--muted); }
+.spread-pop .club b { font-weight: 600; }
 .spread .track { width: 100%; height: 56px; display: flex; align-items: flex-end; background: var(--sunk); border-radius: 4px; overflow: hidden; }
 .spread .fill { width: 100%; background: var(--accent); border-radius: 4px 4px 0 0; min-height: 0; }
 .spread .n { font-family: var(--font-data); font-size: 13px; }
@@ -1479,7 +1483,7 @@ function renderMembers({ C, watched }) {
       <div class="spread" role="group" aria-label="Ratings given">
         ${c.spread.map((n, i) => {
           const films = c.films[i];
-          const pop = n ? `<div class="spread-pop"><div class="inner"><div class="h">${i + 1}★ · ${plural(n, "film")}</div><ul>${films.map(f => `<li><span>${esc(f.title)}</span><span>${fmt(f.date, { month: "short", day: "numeric" })}</span></li>`).join("")}</ul></div></div>` : "";
+          const pop = n ? `<div class="spread-pop"><div class="inner"><div class="h">${i + 1}★ · ${plural(n, "film")}</div><ul>${films.map(f => `<li><span>${esc(f.title)}</span><span class="club">club <b style="color:${RATING[Math.min(5, Math.max(1, Math.round(f.avg)))][0]}">${f.avg.toFixed(1)}</b></span><span class="dt">${fmt(f.date, { month: "short", day: "numeric" })}</span></li>`).join("")}</ul></div></div>` : "";
           return `<div class="col ${n ? "has" : ""}"${n ? ` tabindex="0"` : ""} aria-label="${n} at ${i + 1} star${i ? "s" : ""}${n ? `: ${esc(films.map(f => f.title).join(", "))}` : ""}"><span class="n">${n}</span><div class="track"><div class="fill" style="height:${(n / top) * 100}%; background:${RATING[i + 1][0]}"></div></div><span class="k">${i + 1}★</span>${pop}</div>`;
         }).join("")}
       </div>`;
