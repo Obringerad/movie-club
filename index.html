@@ -682,6 +682,13 @@ footer { color: var(--muted); font-size: 13px; text-align: center; padding-top: 
 <dialog id="settings" aria-labelledby="settings-h">
   <form id="settings-form" novalidate>
     <h3 id="settings-h">Settings</h3>
+    <div class="field">
+      <span class="label">Runtime format</span>
+      <div class="seg" role="group" aria-label="Runtime format" id="runtime-format" style="justify-self:start">
+        <button type="button" data-format="min">135 min</button>
+        <button type="button" data-format="hm">2h15m</button>
+      </div>
+    </div>
     <fieldset class="palettes" id="palettes"></fieldset>
     <div class="custom-share">
       <button class="btn small" type="button" id="custom-import-open">Import a palette</button>
@@ -715,7 +722,11 @@ footer { color: var(--muted); font-size: 13px; text-align: center; padding-top: 
         <p class="note" id="custom-share-note" aria-live="polite"></p>
       </div>
     </div>
-    <p class="muted" style="margin:0;font-size:13px">Your choice is saved on this device only and doesn't change the site for anyone else.</p>
+    <p class="muted" style="margin:0;font-size:13px">These choices are saved on this device only and don't change the site for anyone else.</p>
+    <div class="field" id="settings-account" hidden>
+      <span class="label">Account</span>
+      <button class="btn small" type="button" id="btn-passwd" style="justify-self:start">Change password</button>
+    </div>
     <div class="dialog-actions">
       <div class="right"><button type="submit" class="btn primary">Done</button></div>
     </div>
@@ -797,7 +808,13 @@ const fmt = (iso, opts) => new Date(dayNum(iso) * 864e5).toLocaleDateString("en-
 const fmtTs = (ts, opts) => new Date(ts).toLocaleDateString("en-US", opts);
 const today = (() => { const n = new Date(); return Date.UTC(n.getFullYear(), n.getMonth(), n.getDate()) / 864e5; })();
 const mean = a => a.length ? a.reduce((x, y) => x + y, 0) / a.length : null;
-const runtime = m => !m ? "" : m >= 600 ? `${Math.round(m / 60).toLocaleString()} hr` : `${m} min`;
+let runtimeFormat = "min";            // "min" (135 min) or "hm" (2h15m), saved per browser
+try { if (localStorage.getItem("jboiz-runtime") === "hm") runtimeFormat = "hm"; } catch (e) {}
+const runtime = m => {
+  if (!m) return "";
+  if (runtimeFormat === "hm") { const h = Math.floor(m / 60), r = m % 60; return h ? `${h.toLocaleString()}h${r ? `${r}m` : ""}` : `${r}m`; }
+  return m >= 600 ? `${Math.round(m / 60).toLocaleString()} hr` : `${m} min`;
+};
 const imdbUrl = id => `https://www.imdb.com/title/${id}/`;
 const stars = v => `<span class="stars" role="img" aria-label="${v.toFixed(1)} out of 5">★★★★★<span style="width:${(v / 5) * 100}%" aria-hidden="true">★★★★★</span></span>`;
 const plural = (n, w) => `${n} ${w}${n === 1 ? "" : "s"}`;
@@ -962,7 +979,6 @@ function renderAccount() {
   const settingsBtn = `<button class="link-btn" type="button" id="btn-settings">Settings</button>`;
   $("account").innerHTML = (me
     ? `<span>Logged in as <span class="me">${esc(me)}</span></span>
-       <button class="link-btn" type="button" id="btn-passwd">Change password</button>
        <button class="link-btn" type="button" id="btn-logout">Log out</button>`
     : session
       ? `<span class="muted">This login isn't linked to a club member yet.</span><button class="link-btn" type="button" id="btn-logout">Log out</button>`
@@ -970,7 +986,7 @@ function renderAccount() {
   $("btn-settings").addEventListener("click", openSettings);
   $("btn-login")?.addEventListener("click", openLogin);
   $("btn-logout")?.addEventListener("click", async () => { await sb.auth.signOut(); toast("Logged out"); });
-  $("btn-passwd")?.addEventListener("click", () => { $("passwd-form").reset(); $("passwd-error").hidden = true; openDialog($("passwd")); $("p-new").focus(); });
+
 }
 
 function render() {
@@ -1754,7 +1770,24 @@ function syncCustomEditor() {
   }
 }
 const swatchInner = (bg, surface, accent, display) => `<span style="background:${bg}"></span><span style="background:${surface}"></span><span style="background:linear-gradient(${display} 50%, ${accent} 50%)"></span>`;
+function syncSettingsExtras() {
+  $("settings-account").hidden = !me;
+  $("runtime-format").querySelectorAll("[data-format]").forEach(b => b.setAttribute("aria-pressed", b.dataset.format === runtimeFormat ? "true" : "false"));
+}
+$("runtime-format").addEventListener("click", e => {
+  const b = e.target.closest("[data-format]"); if (!b) return;
+  runtimeFormat = b.dataset.format;
+  try { localStorage.setItem("jboiz-runtime", runtimeFormat); } catch (e) {}
+  syncSettingsExtras();
+  render();
+});
+$("btn-passwd").addEventListener("click", () => {
+  closeDialog($("settings"));
+  $("passwd-form").reset(); $("passwd-error").hidden = true;
+  openDialog($("passwd")); $("p-new").focus();
+});
 function openSettings() {
+  syncSettingsExtras();
   const cur = currentPalette();
   const mine = loadPalettes().map(x => [`custom:${x.id}`, x.name, x.imported ? "Imported" : "Yours", x.base.bg, x.base.surface, x.base.accent, x.base.display]);
   const tile = ([id, name, note, bg, surface, accent, display]) => `
