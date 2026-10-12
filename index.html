@@ -611,7 +611,7 @@ async function load() {
     sb.from("slots").select("*").order("date"),
     sb.from("ratings").select("*"),
     sb.from("vetoes").select("id, slot, member, created_at"),
-    sb.from("absences").select("slot, member")
+    sb.from("absences").select("*")
   ]);
   const err = m.error || s.error || r.error || v.error;
   if (err) throw err;
@@ -619,8 +619,12 @@ async function load() {
   members = m.data;
   canPoster = s.data.length > 0 && "poster" in s.data[0];
   canReview = r.data.length > 0 && "review" in r.data[0];
-  const byDate = new Map(s.data.map(x => [x.date, { ...x, ratings: {}, reviews: {}, missed: new Set() }]));
-  (a.data || []).forEach(x => byDate.get(x.slot)?.missed.add(x.member));
+  const byDate = new Map(s.data.map(x => [x.date, { ...x, ratings: {}, reviews: {}, missed: new Set(), autoMissed: new Set() }]));
+  (a.data || []).forEach(x => {
+    const sl = byDate.get(x.slot); if (!sl) return;
+    sl.missed.add(x.member);
+    if (x.auto) sl.autoMissed.add(x.member);
+  });
   r.data.forEach(x => {
     const sl = byDate.get(x.slot); if (!sl) return;
     sl.ratings[x.member] = x.score;
@@ -741,7 +745,9 @@ function renderTurn({ watched, upcoming }) {
   const unrated = watched.filter(f => !f.ratings[me] && !f.missed.has(me)).sort((a, b) => b.date.localeCompare(a.date));
   if (unrated.length) {
     const shown = unrated.slice(0, 3);
-    parts.push(`<span class="item"><span>Rate:</span>${shown.map(f => `<button class="chip-btn" type="button" data-act="goto" data-id="${f.date}">${esc(f.title)}</button>`).join("")}${unrated.length > 3 ? `<button class="link-btn" type="button" data-act="goto-tab" data-id="ratings">+${unrated.length - 3} more</button>` : ""}</span>`);
+    const left = f => RATE_WITHIN_DAYS - (today - dayNum(f.date));
+    const due = f => { const d = left(f); return d > 1 ? ` · ${d} days left` : d === 1 ? " · 1 day left" : d === 0 ? " · last day" : ""; };
+    parts.push(`<span class="item"><span>Rate:</span>${shown.map(f => `<button class="chip-btn" type="button" data-act="goto" data-id="${f.date}">${esc(f.title)}${canMiss ? due(f) : ""}</button>`).join("")}${unrated.length > 3 ? `<button class="link-btn" type="button" data-act="goto-tab" data-id="ratings">+${unrated.length - 3} more</button>` : ""}</span>`);
   }
   const mine = upcoming.find(s => isPicker(s, me));
   if (mine) {
@@ -821,6 +827,7 @@ function renderVetoes() {
 }
 
 const SHOWN = 12;
+const RATE_WITHIN_DAYS = 7;
 function renderSchedule({ upcoming }) {
   const later = upcoming.slice(1);
   const list = showAll ? later : later.slice(0, SHOWN);
@@ -863,7 +870,7 @@ function renderWatched({ C, watched }) {
   if (rated.length) {
     const best = rated.reduce((a, b) => (b.avg > a.avg ? b : a));
     const worst = rated.reduce((a, b) => (b.avg < a.avg ? b : a));
-    $("watched-sub").textContent = `Top rated so far: ${best.title} (${best.avg.toFixed(1)}). Bottom: ${worst.title} (${worst.avg.toFixed(1)}). Tap a film to see everyone's take${me && canReview ? " and add yours" : ""}.`;
+    $("watched-sub").textContent = `Top rated so far: ${best.title} (${best.avg.toFixed(1)}). Bottom: ${worst.title} (${worst.avg.toFixed(1)}). Tap a film to see everyone's take${me && canReview ? " and add yours" : ""}.${canMiss ? ` No rating within ${RATE_WITHIN_DAYS} days of a screening counts as missed.` : ""}`;
   } else $("watched-sub").textContent = "";
 
   const sortTh = (k, label) => `<th><button type="button" data-sort="${k}"${k === sortKey ? ` aria-sort="${sortDir === 1 ? "ascending" : "descending"}"` : ""}>${label}</button></th>`;
@@ -904,10 +911,15 @@ function renderDetail(f, C) {
   const list = entries.length
     ? `<ul class="detail-takes">${entries.map(e => `<li><span class="name">${esc(e.name)}</span>${stars(e.score)}<span class="text ${e.text ? "" : "muted"}">${e.text ? esc(e.text) : canReview ? "No review" : ""}</span></li>`).join("")}</ul>`
     : `<p class="muted" style="margin:0">Nobody has rated this yet.</p>`;
-  const missedNames = C.filter(c => f.missed.has(c));
-  const missedLine = missedNames.length ? `<p class="missed-line">Missed it: <b>${missedNames.map(esc).join(", ")}</b></p>` : "";
+  const said = C.filter(c => f.missed.has(c) && !f.autoMissed.has(c));
+  const late = C.filter(c => f.autoMissed.has(c));
+  const missedLine =
+    (said.length ? `<p class="missed-line">Missed it: <b>${said.map(esc).join(", ")}</b></p>` : "") +
+    (late.length ? `<p class="missed-line">No rating within ${RATE_WITHIN_DAYS} days: <b>${late.map(esc).join(", ")}</b></p>` : "");
   let attend = "";
-  if (me && canMiss) {
+  if (me && canMiss && f.autoMissed.has(me)) {
+    attend = `<div class="attend"><span class="muted">Counted as missed because you didn't rate it within ${RATE_WITHIN_DAYS} days. Rate it to clear that.</span></div>`;
+  } else if (me && canMiss) {
     attend = f.missed.has(me)
       ? `<div class="attend"><span class="muted">You missed this screening.</span><button class="link-btn" type="button" data-act="missed" data-id="${f.date}">I was there after all</button></div>`
       : `<div class="attend"><button class="btn small" type="button" data-act="missed" data-id="${f.date}">I missed this one</button></div>`;
@@ -921,7 +933,7 @@ function renderDetail(f, C) {
            <input id="review-${f.date}" data-review="${f.date}" maxlength="200" placeholder="Your one-line take on ${esc(f.title)}" value="${esc(val)}" aria-label="Your review of ${esc(f.title)}">
            <button class="btn small primary" type="button" data-act="review" data-id="${f.date}">Save review</button>
          </div>`
-      : f.missed.has(me) ? "" : `<p class="muted" style="margin:12px 0 0">Give it stars first, then you can add a review.</p>`;
+      : f.missed.has(me) && !f.autoMissed.has(me) ? "" : `<p class="muted" style="margin:12px 0 0">Give it stars first, then you can add a review.</p>`;
   }
   const poster = posterImg(f);
   return `<div class="detail-grid ${poster ? "" : "no-poster"}">${poster ? `<div>${poster}</div>` : ""}<div>${list}${missedLine}${form}${attend}</div></div>`;
@@ -929,14 +941,14 @@ function renderDetail(f, C) {
 
 const shade = v => `background: color-mix(in oklab, var(--accent) ${12 + (v - 1) * 20}%, var(--surface)); color: ${v >= 4 ? "var(--on-accent)" : "var(--fg)"}`;
 function renderGrid({ C, watched }) {
-  $("legend").innerHTML = [1, 2, 3, 4, 5].map(v => `<span class="chip"><i style="${shade(v)}"></i>${v}</span>`).join("") + `<span class="chip">· = didn't rate</span>` + (canMiss ? `<span class="chip">MISSED = wasn't there</span>` : "");
+  $("legend").innerHTML = [1, 2, 3, 4, 5].map(v => `<span class="chip"><i style="${shade(v)}"></i>${v}</span>`).join("") + `<span class="chip">· = didn't rate</span>` + (canMiss ? `<span class="chip">MISSED = wasn't there or no rating within ${RATE_WITHIN_DAYS} days</span>` : "");
   const rows = [...watched].sort((a, b) => b.date.localeCompare(a.date));
   $("grid").innerHTML = `
     <thead><tr><th class="film">Film</th>${C.map(c => `<th class="${c === me ? "me-col" : ""}">${esc(c)}</th>`).join("")}<th>Avg</th></tr></thead>
     <tbody>${rows.map(f => `
       <tr><th class="film" scope="row">${esc(f.title)}</th>
         ${f.vals.map((v, i) => v ? `<td style="${shade(v)}">${v}</td>`
-          : f.missed.has(C[i]) ? `<td class="missed" title="${esc(C[i])} missed this screening">Missed</td>`
+          : f.missed.has(C[i]) ? `<td class="missed" title="${esc(C[i])} ${f.autoMissed.has(C[i]) ? `didn't rate this within ${RATE_WITHIN_DAYS} days` : "missed this screening"}">Missed</td>`
           : `<td class="blank" aria-label="not rated">·</td>`).join("")}
         <td class="avg">${f.avg != null ? f.avg.toFixed(1) : "–"}</td></tr>`).join("")}
     </tbody>`;
