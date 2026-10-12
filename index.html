@@ -83,7 +83,7 @@ body {
   font-family: var(--font-body); font-size: 15px; line-height: 1.5;
 }
 [hidden] { display: none !important; }
-.page { max-width: 1080px; margin: 0 auto; padding-inline: 16px; padding-block: calc(24px + env(safe-area-inset-top, 0px)) 64px; display: grid; gap: 24px; }
+.page { position: relative; max-width: 1080px; margin: 0 auto; padding-inline: 16px; padding-block: calc(24px + env(safe-area-inset-top, 0px)) 64px; display: grid; gap: 24px; }
 h1, h2 { font-family: var(--font-display); font-weight: 400; color: var(--display); text-wrap: balance; margin: 0; line-height: 1.05; }
 h2 { font-size: clamp(22px, 3.2vw, 28px); }
 .label { font-family: var(--font-body); font-stretch: 75%; font-weight: 700; text-transform: uppercase; letter-spacing: .12em; font-size: 12px; color: var(--muted); }
@@ -406,6 +406,22 @@ dialog h3 { margin: 0; font-family: var(--font-display); font-weight: 400; font-
 .color-field small { display: block; font-weight: 400; font-size: 12px; color: var(--muted); }
 .custom-warn { margin: 0; font-size: 13px; color: var(--danger); }
 
+/* Party mode: images members drop on the page */
+.party-layer { position: absolute; inset: 0; z-index: 4; pointer-events: none; }
+.sticker { position: absolute; pointer-events: none; user-select: none; -webkit-user-select: none; }
+.sticker img { display: block; width: 100%; height: auto; border-radius: 2px; pointer-events: none; }
+.party-edit .sticker { pointer-events: auto; cursor: grab; touch-action: none; }
+.party-edit .sticker:hover, .party-edit .sticker.active { outline: 2px dashed var(--accent); outline-offset: 2px; }
+.sticker.dragging { cursor: grabbing; opacity: .9; }
+.sticker .st-del, .sticker .st-resize { position: absolute; display: none; }
+.party-edit .sticker:hover .st-del, .party-edit .sticker:hover .st-resize,
+.party-edit .sticker.active .st-del, .party-edit .sticker.active .st-resize { display: grid; }
+.sticker .st-del { top: -12px; right: -12px; min-width: 26px; height: 26px; padding: 0 8px; border-radius: 13px; place-items: center; font: inherit; font-size: 13px; font-weight: 700; border: 0; cursor: pointer; background: var(--fg); color: var(--bg); box-shadow: 0 2px 6px rgb(0 0 0 / .4); }
+.sticker .st-del.confirm { background: var(--danger); color: #fff; }
+.sticker .st-resize { right: -8px; bottom: -8px; width: 18px; height: 18px; border-radius: 4px; background: var(--accent); border: 2px solid var(--bg); cursor: nwse-resize; touch-action: none; }
+.party-on .party-btn { color: var(--accent); }
+.party-drop { position: fixed; inset: 0; z-index: 30; display: grid; place-items: center; background: rgb(0 0 0 / .55); color: #fff; font-family: var(--font-display); font-size: 28px; pointer-events: none; }
+
 /* Toast */
 .toast-btn { font: inherit; color: inherit; background: none; border: 1px solid currentColor; border-radius: 5px; padding: 2px 10px; margin-left: 12px; cursor: pointer; }
 .toast-btn:hover { background: color-mix(in oklab, currentColor 15%, transparent); }
@@ -434,6 +450,7 @@ footer { color: var(--muted); font-size: 13px; text-align: center; padding-top: 
 </head>
 <body>
 <main class="page">
+  <div class="party-layer" id="party-layer" hidden></div>
   <header class="marquee">
     <span class="label">Now showing at</span>
     <h1><a class="home-link" href="./" id="home-link">JBOIZ Movie Club</a></h1>
@@ -650,6 +667,8 @@ footer { color: var(--muted); font-size: 13px; text-align: center; padding-top: 
 </dialog>
 
 <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
+<input type="file" id="party-file" accept="image/png,image/jpeg,image/gif,image/webp" multiple hidden>
+<div class="party-drop" id="party-drop" hidden>Drop to add to the page</div>
 
 <script src="config.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.2/dist/umd/supabase.js"></script>
@@ -712,21 +731,29 @@ const openFilms = new Set();          // expanded rows in the watched table
 const drafts = {};                    // unsaved review text, by film date
 let canReview = false, canPoster = false; // database has the review / poster columns
 let canMiss = false;                  // database has the absences table
+let canParty = false;                 // database has the stickers table
+let stickers = [];                    // [{id, path, tab, x, y, w, z, added_by}]
+let party = false;                    // this viewer's party mode switch (saved per browser)
+try { party = localStorage.getItem("jboiz-party") === "on"; } catch (e) {}
+let partyDrag = null;                 // the image being moved or resized, if any
 
 const critics = () => members.map(m => m.name);
 const pickOrder = () => members.filter(m => m.pick_order != null).sort((a, b) => a.pick_order - b.pick_order).map(m => m.name);
 
 /* ---------- data ---------- */
 async function load() {
-  const [m, s, r, a] = await Promise.all([
+  const [m, s, r, a, st] = await Promise.all([
     sb.from("members").select("name, pick_order").order("pick_order", { nullsFirst: false }),
     sb.from("slots").select("*").order("date"),
     sb.from("ratings").select("*"),
-    sb.from("absences").select("*")
+    sb.from("absences").select("*"),
+    sb.from("stickers").select("*").order("z")
   ]);
   const err = m.error || s.error || r.error;
   if (err) throw err;
   canMiss = !a.error; // the absences table may not exist yet
+  canParty = !st.error;
+  stickers = st.data || [];
   members = m.data;
   canPoster = s.data.length > 0 && "poster" in s.data[0];
   canReview = r.data.length > 0 && "review" in r.data[0];
@@ -786,6 +813,7 @@ function setTab(t, { scroll = true } = {}) {
     $("panel-" + x).hidden = x !== t;
   });
   try { history.replaceState(null, "", t === "next" ? location.pathname : "#" + t); } catch (e) {}
+  renderParty();
   if (scroll) {
     const nav = $("tabs");
     if (nav.getBoundingClientRect().top < 0) window.scrollTo({ top: nav.offsetTop, behavior: "instant" });
@@ -806,7 +834,10 @@ setTab(location.hash.slice(1), { scroll: false });
 
 /* ---------- render ---------- */
 function renderAccount() {
-  const settingsBtn = `<button class="link-btn" type="button" id="btn-settings">Settings</button>`;
+  const settingsBtn = (canParty
+      ? `<button class="link-btn party-btn" type="button" id="btn-party" aria-pressed="${party}">Party mode: ${party ? "on" : "off"}</button>` +
+        (party && me ? `<button class="btn small primary" type="button" id="btn-add-image">Add image</button>` : "")
+      : "") + `<button class="link-btn" type="button" id="btn-settings">Settings</button>`;
   $("account").innerHTML = (me
     ? `<span>Logged in as <span class="me">${esc(me)}</span></span>
        <button class="link-btn" type="button" id="btn-passwd">Change password</button>
@@ -815,6 +846,13 @@ function renderAccount() {
       ? `<span class="muted">This login isn't linked to a club member yet.</span><button class="link-btn" type="button" id="btn-logout">Log out</button>`
       : `<button class="btn primary small" type="button" id="btn-login">Log in to rate and pick</button>`) + settingsBtn;
   $("btn-settings").addEventListener("click", openSettings);
+  $("btn-party")?.addEventListener("click", () => {
+    party = !party;
+    try { localStorage.setItem("jboiz-party", party ? "on" : "off"); } catch (e) {}
+    render();
+    toast(party ? (me ? "Party mode on. Add images with the button, paste them, or drop them on the page." : "Party mode on") : "Party mode off");
+  });
+  $("btn-add-image")?.addEventListener("click", () => $("party-file").click());
   $("btn-login")?.addEventListener("click", openLogin);
   $("btn-logout")?.addEventListener("click", async () => { await sb.auth.signOut(); toast("Logged out"); });
   $("btn-passwd")?.addEventListener("click", () => { $("passwd-form").reset(); $("passwd-error").hidden = true; openDialog($("passwd")); $("p-new").focus(); });
@@ -832,6 +870,7 @@ function render() {
   const D = derive();
   renderTagline(D); renderTurn(D); renderTicket(D); renderTakes(D);
   renderSchedule(D); renderOrder(D); renderWatched(D); renderGrid(D); renderMembers(D);
+  renderParty();
 
   if (popFor && !popFor.isConnected) hidePop();
   if (keep) { const el = $(keep.id); if (el) { el.focus(); try { el.setSelectionRange(keep.pos, keep.pos); } catch (e) {} } }
@@ -1207,6 +1246,144 @@ function renderMembers({ C, watched }) {
       </article>`;
   }).join("");
 }
+
+/* ---------- party mode ---------- */
+const partyUrl = path => `${CFG.supabaseUrl}/storage/v1/object/public/party/${path}`;
+function renderParty() {
+  const layer = $("party-layer");
+  if (!layer) return;
+  const on = canParty && party;
+  document.body.classList.toggle("party-on", on);
+  layer.hidden = !on;
+  layer.classList.toggle("party-edit", on && !!me);
+  if (!on || partyDrag) return; // don't redraw under someone's finger
+  layer.innerHTML = stickers.filter(st => st.tab === tab).map(st => `
+    <div class="sticker" data-id="${st.id}" style="left:${st.x * 100}%; top:${st.y}px; width:${st.w * 100}%; z-index:${st.z}">
+      <img src="${esc(partyUrl(st.path))}" alt="" loading="lazy" draggable="false">
+      ${me ? `<button class="st-del" type="button" data-del="${st.id}" aria-label="Remove image">×</button><span class="st-resize" aria-hidden="true"></span>` : ""}
+    </div>`).join("");
+}
+
+// Move and resize with pointer events (mouse, touch, pen). Saved once when you let go.
+$("party-layer").addEventListener("pointerdown", e => {
+  if (!me || e.button > 0) return;
+  const el = e.target.closest(".sticker"); if (!el || e.target.closest(".st-del")) return;
+  e.preventDefault();
+  const layer = $("party-layer").getBoundingClientRect(), box = el.getBoundingClientRect();
+  partyDrag = {
+    el, id: el.dataset.id, resize: !!e.target.closest(".st-resize"),
+    startX: e.clientX, startY: e.clientY, left: box.left - layer.left, top: box.top - layer.top, width: box.width, layerW: layer.width
+  };
+  const topZ = Math.max(0, ...stickers.map(s => s.z)) + 1;
+  el.style.zIndex = topZ; partyDrag.z = topZ;
+  document.querySelectorAll(".sticker.active").forEach(x => x.classList.remove("active"));
+  el.classList.add("active", "dragging");
+  try { el.setPointerCapture(e.pointerId); } catch (err) {}
+});
+$("party-layer").addEventListener("pointermove", e => {
+  const d = partyDrag; if (!d) return;
+  const dx = e.clientX - d.startX, dy = e.clientY - d.startY;
+  if (d.resize) {
+    d.newW = Math.max(40, Math.min(d.layerW, d.width + dx));
+    d.el.style.width = `${(d.newW / d.layerW) * 100}%`;
+  } else {
+    d.el.style.left = `${((d.left + dx) / d.layerW) * 100}%`;
+    d.el.style.top = `${Math.max(0, d.top + dy)}px`;
+  }
+});
+async function endPartyDrag(e) {
+  const d = partyDrag; if (!d) return;
+  partyDrag = null;
+  d.el.classList.remove("dragging");
+  const dx = e.clientX - d.startX, dy = e.clientY - d.startY;
+  if (Math.abs(dx) < 2 && Math.abs(dy) < 2 && !d.resize) return; // a tap, not a drag
+  const patch = d.resize
+    ? { w: (d.newW ?? d.width) / d.layerW, z: d.z }
+    : { x: (d.left + dx) / d.layerW, y: Math.max(0, d.top + dy), z: d.z };
+  const st = stickers.find(s => s.id === d.id); if (st) Object.assign(st, patch);
+  const { error } = await sb.from("stickers").update(patch).eq("id", d.id);
+  if (error) { toast("Couldn't save where that image went. Try again."); scheduleReload(); }
+}
+$("party-layer").addEventListener("pointerup", endPartyDrag);
+$("party-layer").addEventListener("pointercancel", endPartyDrag);
+// Tap elsewhere to deselect.
+document.addEventListener("pointerdown", e => { if (!e.target.closest(".sticker")) document.querySelectorAll(".sticker.active").forEach(x => x.classList.remove("active")); });
+
+// Remove: tap × once to arm, again to delete.
+$("party-layer").addEventListener("click", async e => {
+  const b = e.target.closest("[data-del]"); if (!b) return;
+  if (!b.classList.contains("confirm")) { b.classList.add("confirm"); b.textContent = "Delete?"; setTimeout(() => { b.classList.remove("confirm"); b.textContent = "×"; }, 3000); return; }
+  const st = stickers.find(s => s.id === b.dataset.del); if (!st) return;
+  stickers = stickers.filter(s => s !== st); renderParty();
+  const { error } = await sb.from("stickers").delete().eq("id", st.id);
+  if (error) { toast("Couldn't remove that image."); scheduleReload(); return; }
+  sb.storage.from("party").remove([st.path]).catch(() => {});
+  toast("Image removed");
+});
+
+// Shrink big photos before upload; GIFs go up as they are so they keep animating.
+async function prepareImage(file) {
+  if (file.type === "image/gif") return { blob: file, ext: "gif", type: "image/gif" };
+  const bmp = await createImageBitmap(file);
+  const scale = Math.min(1, 1000 / Math.max(bmp.width, bmp.height));
+  const c = document.createElement("canvas");
+  c.width = Math.round(bmp.width * scale); c.height = Math.round(bmp.height * scale);
+  c.getContext("2d").drawImage(bmp, 0, 0, c.width, c.height);
+  const toBlob = (type, q) => new Promise(r => c.toBlob(r, type, q));
+  let blob = await toBlob("image/webp", 0.85);
+  if (blob && blob.type === "image/webp") return { blob, ext: "webp", type: "image/webp" };
+  const png = file.type === "image/png";
+  blob = await toBlob(png ? "image/png" : "image/jpeg", 0.85);
+  return { blob, ext: png ? "png" : "jpg", type: png ? "image/png" : "image/jpeg" };
+}
+async function addPartyImages(files, at) {
+  if (!me) { openLogin(); return; }
+  if (!canParty) return;
+  const imgs = [...files].filter(f => /^image\/(png|jpeg|gif|webp)$/.test(f.type));
+  if (!imgs.length) { toast("That isn't an image the page can use. Try a PNG, JPG, GIF or WebP."); return; }
+  if (!party) { party = true; try { localStorage.setItem("jboiz-party", "on"); } catch (e) {} }
+  const layer = $("party-layer").getBoundingClientRect();
+  let i = 0;
+  for (const f of imgs) {
+    if (f.size > 5 * 1024 * 1024 && f.type === "image/gif") { toast("That GIF is over 5 MB. Try a smaller one."); continue; }
+    toast("Adding image…");
+    let prepared;
+    try { prepared = await prepareImage(f); } catch (e) { toast("Couldn't read that image."); continue; }
+    const path = `${crypto.randomUUID()}.${prepared.ext}`;
+    const up = await sb.storage.from("party").upload(path, prepared.blob, { contentType: prepared.type, cacheControl: "31536000" });
+    if (up.error) { toast(/size|large/i.test(up.error.message) ? "That image is too big (5 MB max)." : "Couldn't upload that image. Try again."); continue; }
+    const cx = at ? at.x : innerWidth / 2, cy = at ? at.y : innerHeight / 3;
+    const w = Math.min(0.3, 260 / layer.width);
+    const row = {
+      path, tab, added_by: me, w,
+      x: Math.min(1 - w, Math.max(0, (cx - layer.left) / layer.width - w / 2)) + i * 0.02,
+      y: Math.max(0, cy - layer.top - 60 + i * 20),
+      z: Math.max(0, ...stickers.map(s => s.z)) + 1
+    };
+    const { error } = await sb.from("stickers").insert(row);
+    if (error) { sb.storage.from("party").remove([path]).catch(() => {}); toast("Couldn't place that image. Try again."); continue; }
+    i++;
+  }
+  if (i) { toast(i > 1 ? `Added ${i} images` : "Image added. Drag it around, or drag the corner to resize."); scheduleReload(); }
+}
+$("party-file").addEventListener("change", e => { addPartyImages(e.target.files); e.target.value = ""; });
+// Paste an image anywhere (not while typing in a box).
+document.addEventListener("paste", e => {
+  if (!canParty || !me || e.target.closest("input, textarea")) return;
+  const files = [...(e.clipboardData?.files || [])];
+  if (files.length) { e.preventDefault(); addPartyImages(files); }
+});
+// Drag files from your computer onto the page.
+let dropDepth = 0;
+const hasFiles = e => [...(e.dataTransfer?.types || [])].includes("Files");
+document.addEventListener("dragenter", e => { if (canParty && me && hasFiles(e)) { dropDepth++; $("party-drop").hidden = false; } });
+document.addEventListener("dragleave", e => { if (hasFiles(e) && --dropDepth <= 0) { dropDepth = 0; $("party-drop").hidden = true; } });
+document.addEventListener("dragover", e => { if (canParty && me && hasFiles(e)) e.preventDefault(); });
+document.addEventListener("drop", e => {
+  if (!hasFiles(e)) return;
+  e.preventDefault(); dropDepth = 0; $("party-drop").hidden = true;
+  if (canParty && me) addPartyImages(e.dataTransfer.files, { x: e.clientX, y: e.clientY });
+});
 
 /* ---------- settings: personal palette ---------- */
 // [id, name, note, swatch colours: background, surface, accent, display]
@@ -1716,6 +1893,7 @@ $("editor-clear").addEventListener("click", () => {
     .on("postgres_changes", { event: "*", schema: "public", table: "slots" }, scheduleReload)
     .on("postgres_changes", { event: "*", schema: "public", table: "ratings" }, scheduleReload)
     .on("postgres_changes", { event: "*", schema: "public", table: "absences" }, scheduleReload)
+    .on("postgres_changes", { event: "*", schema: "public", table: "stickers" }, scheduleReload)
     .subscribe();
   document.addEventListener("visibilitychange", () => { if (!document.hidden) scheduleReload(); });
   window.addEventListener("hashchange", () => setTab(location.hash.slice(1)));
