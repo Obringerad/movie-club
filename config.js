@@ -6,6 +6,8 @@ window.MOVIE_CLUB = {
   supabaseAnonKey: "sb_publishable_94ikJzCE7WqgNnuF3UNk_Q_qpL7JpPZ",
   // Login names map to these addresses. No email is ever sent to them.
   emailDomain: "movieclub.com",
-  // Free key from omdbapi.com, for posters and filling in film details from an IMDb link.
+  // TMDB (themoviedb.org) key: film search, posters and details. Read-only, safe to publish.
+  tmdbApiKey: "388d77b6077940f3e23b12b868c214e4",
+  // Backup for details if TMDB can't be reached (omdbapi.com).
   omdbApiKey: "b57fd6a3"
 };

@@ -528,7 +528,7 @@ footer { color: var(--muted); font-size: 13px; text-align: center; padding-top: 
     </div>
   </div>
 
-  <footer>Anyone with the link can look. Log in to rate, review and pick. Film search, posters and details from IMDb and OMDb.</footer>
+  <footer>Anyone with the link can look. Log in to rate, review and pick. Film data and posters from TMDB. This product uses the TMDB API but is not endorsed or certified by TMDB.</footer>
 </main>
 
 <dialog id="login" class="narrow" aria-labelledby="login-h">
@@ -646,6 +646,7 @@ footer { color: var(--muted); font-size: 13px; text-align: center; padding-top: 
 <script>
 const CFG = window.MOVIE_CLUB || {};
 const OMDB_KEY = CFG.omdbApiKey && !CFG.omdbApiKey.startsWith("PASTE") ? CFG.omdbApiKey : "";
+const TMDB_KEY = CFG.tmdbApiKey || "";
 
 /* ---------- helpers ---------- */
 const $ = id => document.getElementById(id);
@@ -1298,7 +1299,7 @@ document.body.append(pop);
 const canHover = matchMedia("(hover: hover) and (pointer: fine)");
 let popFor = null;
 // OMDb poster links end in _SX300.jpg; ask for a sharper copy, falling back to the original.
-const bigPoster = url => url.replace(/_SX\d+(?=\.\w+$)/, "_SX900");
+const bigPoster = url => url.replace(/_SX\d+(?=\.\w+$)/, "_SX900").replace(/(image\.tmdb\.org\/t\/p\/)w\d+\//, "$1w780/");
 pop.addEventListener("error", () => { if (popFor && pop.src !== popFor.src) pop.src = popFor.src; });
 function placePop(x, y) {
   // As big as 420 × 630, shrunk to fit short windows and to leave room beside the cursor.
@@ -1484,14 +1485,14 @@ const omdbPoster = j => j && j.Poster && j.Poster.startsWith("https://") ? j.Pos
 // Fill in posters the database doesn't have yet. Runs once per page load for a logged-in member.
 let backfilled = false;
 async function backfillPosters() {
-  if (backfilled || !OMDB_KEY || !canPoster || !slots) return;
+  if (backfilled || !(TMDB_KEY || OMDB_KEY) || !canPoster || !slots) return;
   backfilled = true;
   const todo = slots.filter(s => s.imdb && !s.poster);
   let changed = 0;
   for (const s of todo) {
-    const j = await omdb(s.imdb);
-    if (!j) continue;
-    const { error } = await sb.from("slots").update({ poster: omdbPoster(j) }).eq("date", s.date).is("poster", null);
+    const f = await filmByImdb(s.imdb);
+    if (!f) continue;
+    const { error } = await sb.from("slots").update({ poster: f.poster }).eq("date", s.date).is("poster", null);
     if (!error) changed++;
   }
   if (changed) scheduleReload();
@@ -1524,48 +1525,61 @@ function openEditor(slot) {
 }
 
 // Fill the form from IMDb. fresh = replace what's there (a different film); otherwise only fill blanks.
-// IMDb's own search-as-you-type service: fast, no key. Gives title, year, kind and poster.
-const IMDB_KINDS = { movie: "", tvMovie: "TV movie", tvSeries: "TV series", tvMiniSeries: "Mini-series", short: "Short", video: "Video", tvSpecial: "TV special" };
-async function imdbSuggest(q) {
-  const key = q.toLowerCase().replace(/[^a-z0-9 ]/g, "").trim().replace(/\s+/g, "_");
-  if (!key) return [];
-  const r = await fetch(`https://v3.sg.media-imdb.com/suggestion/x/${encodeURIComponent(key)}.json`, { signal: AbortSignal.timeout ? AbortSignal.timeout(8000) : undefined });
+// TMDB: search, details and posters.
+const TMDB = "https://api.themoviedb.org/3";
+const tmdbImg = (path, size = "w500") => path ? `https://image.tmdb.org/t/p/${size}${path}` : null;
+async function tmdb(path, params = {}) {
+  const q = new URLSearchParams({ api_key: TMDB_KEY, ...params });
+  const r = await fetch(`${TMDB}${path}?${q}`, { signal: AbortSignal.timeout ? AbortSignal.timeout(8000) : undefined });
   if (!r.ok) throw new Error(r.status);
-  const j = await r.json();
-  return (j.d || []).filter(x => /^tt\d+$/.test(x.id) && (x.qid in IMDB_KINDS)).map(x => ({
-    id: x.id, title: x.l, year: x.y || "", kind: IMDB_KINDS[x.qid], cast: x.s || "",
-    // Ask for a 300px-wide copy instead of the full-size original.
-    poster: x.i && x.i.imageUrl ? x.i.imageUrl.replace(/\._V1_.*\.jpg$/, "._V1_SX300.jpg") : null
-  }));
+  return r.json();
+}
+async function tmdbSearch(query) {
+  const j = await tmdb("/search/movie", { query, include_adult: "false" });
+  return (j.results || []).map(m => ({ tmdbId: m.id, title: m.title, year: (m.release_date || "").slice(0, 4), thumb: tmdbImg(m.poster_path, "w92"), original: m.original_title !== m.title ? m.original_title : "" }));
+}
+// Full details for a TMDB movie id, in the shape the form uses.
+async function tmdbDetails(tmdbId) {
+  const d = await tmdb(`/movie/${tmdbId}`, { append_to_response: "credits" });
+  return {
+    title: d.title, year: (d.release_date || "").slice(0, 4), imdb: d.imdb_id || null,
+    director: (d.credits?.crew || []).filter(x => x.job === "Director").map(x => x.name).join(", "),
+    genre: (d.genres || []).map(g => g.name).join(", "),
+    mins: d.runtime || null,
+    poster: tmdbImg(d.poster_path) || "none"
+  };
+}
+async function tmdbByImdb(imdbId) {
+  const j = await tmdb(`/find/${imdbId}`, { external_source: "imdb_id" });
+  const m = (j.movie_results || [])[0];
+  return m ? tmdbDetails(m.id) : null;
+}
+// Details for an IMDb id: TMDB first, OMDb as a backup.
+async function filmByImdb(imdbId) {
+  if (TMDB_KEY) { try { const d = await tmdbByImdb(imdbId); if (d) return d; } catch (e) {} }
+  const j = await omdb(imdbId);
+  if (!j) return null;
+  return { title: j.Title, year: j.Year, imdb: imdbId, director: j.Director !== "N/A" ? j.Director : "", genre: j.Genre !== "N/A" ? j.Genre : "", mins: parseInt(j.Runtime, 10) || null, poster: omdbPoster(j) };
 }
 
-// Fill the form for an IMDb id. hint = what the search already knows (title, poster).
-// fresh = replace what's there (a different film); otherwise only fill blanks.
-async function fillFromImdb(id, fresh, hint) {
-  const set = (el, v) => { if (v && v !== "N/A" && (fresh || !$(el).value.trim())) $(el).value = v; };
-  if (hint) { set("f-title", hint.title); editorPoster = hint.poster || editorPoster; }
-  $("imdb-help").textContent = "Looking up the director, genre and runtime…";
-  const j = await omdb(id);
-  if (j) {
-    set("f-title", j.Title); set("f-director", j.Director); set("f-genre", j.Genre);
-    const mins = parseInt(j.Runtime, 10); if (mins > 0) set("f-mins", String(mins));
-    if (j.Poster && j.Poster.startsWith("https://")) editorPoster = j.Poster;
-    else if (!editorPoster) editorPoster = "none";
-    $("imdb-help").textContent = `Filled in from IMDb: ${j.Title}${j.Year ? ` (${j.Year})` : ""}.`;
-    return;
-  }
-  // OMDb is down or slow: fall back to IMDb's search for at least the title and poster.
-  if (!hint) {
-    try { hint = (await imdbSuggest(id)).find(x => x.id === id); } catch (e) {}
-    if (hint) { set("f-title", hint.title); editorPoster = hint.poster || editorPoster; }
-  }
-  $("imdb-help").textContent = hint
-    ? `Got the title and poster for ${hint.title}. The director, genre and runtime couldn't be looked up right now, so add them if you like.`
-    : "Couldn't look that film up right now. Fill in the details below.";
+// Put a film's details into the form. fresh = replace what's there (a different film); otherwise only fill blanks.
+function fillForm(f, fresh) {
+  const set = (el, v) => { if (v && (fresh || !$(el).value.trim())) $(el).value = v; };
+  set("f-title", f.title); set("f-director", f.director); set("f-genre", f.genre);
+  if (f.mins) set("f-mins", String(f.mins));
+  if (f.imdb) $("f-imdb").value = imdbUrl(f.imdb);
+  editorPoster = f.poster || "none";
+  $("imdb-help").textContent = `Filled in: ${f.title}${f.year ? ` (${f.year})` : ""}.`;
+}
+async function fillFromImdb(id, fresh) {
+  $("imdb-help").textContent = "Looking up the film…";
+  const f = await filmByImdb(id);
+  if (f) fillForm(f, fresh);
+  else $("imdb-help").textContent = "Couldn't look that film up right now. Fill in the details below.";
 }
 
 // Title search, debounced; the newest search wins.
-let searchTimer, searchSeq = 0, searchHits = new Map();
+let searchTimer, searchSeq = 0;
 $("f-search").addEventListener("input", () => {
   clearTimeout(searchTimer);
   const q = $("f-search").value.trim();
@@ -1575,30 +1589,28 @@ $("f-search").addEventListener("input", () => {
     $("search-help").textContent = "Searching…";
     let found = [];
     try {
-      found = (await imdbSuggest(q)).slice(0, 8);
+      found = (await tmdbSearch(q)).slice(0, 8);
     } catch (e) {
       if (seq === searchSeq) $("search-help").textContent = "Film search isn't responding right now. Paste the IMDb link below, or type the details in.";
       return;
     }
     if (seq !== searchSeq) return;
-    searchHits = new Map(found.map(r => [r.id, r]));
     $("search-help").textContent = found.length ? "Pick a result and everything below fills in." : `No films found for "${q}". Try a shorter title.`;
     $("search-results").innerHTML = found.map(r => `
-      <li><button type="button" data-pick="${esc(r.id)}">
-        ${r.poster ? `<img class="thumb" src="${esc(r.poster)}" alt="" loading="lazy" referrerpolicy="no-referrer">` : `<span class="thumb"></span>`}
-        <span><b>${esc(r.title)}</b><small>${[r.year, r.kind, r.cast].filter(Boolean).map(esc).join(" · ")}</small></span>
+      <li><button type="button" data-pick="${r.tmdbId}">
+        ${r.thumb ? `<img class="thumb" src="${esc(r.thumb)}" alt="" loading="lazy">` : `<span class="thumb"></span>`}
+        <span><b>${esc(r.title)}</b><small>${[r.year, r.original].filter(Boolean).map(esc).join(" · ")}</small></span>
       </button></li>`).join("");
   }, 300);
 });
 $("search-results").addEventListener("click", async e => {
   const b = e.target.closest("[data-pick]"); if (!b) return;
-  const id = b.dataset.pick, hint = searchHits.get(id);
-  $("f-imdb").value = imdbUrl(id);
   $("search-results").innerHTML = "";
   $("f-search").value = "";
   $("search-help").textContent = "Pick a result and everything below fills in.";
-  editorPoster = null;
-  await fillFromImdb(id, true, hint);
+  $("imdb-help").textContent = "Looking up the film…";
+  try { fillForm(await tmdbDetails(b.dataset.pick), true); }
+  catch (err) { $("imdb-help").textContent = "Couldn't load that film's details right now. Try again, or fill them in below."; }
   $("f-title").focus();
 });
 let imdbTimer;
