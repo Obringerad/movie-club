@@ -39,6 +39,7 @@
   --on-accent: #1b1406;
   --bulb: #f6c45c;
   --danger: #ff8a7a;
+  --good: #6fcf7f;
   --font-display: "Bungee", "Impact", "Arial Black", sans-serif;
   --font-body: "Archivo", "Helvetica Neue", Arial, sans-serif;
   --font-data: "DM Mono", ui-monospace, "Cascadia Mono", Consolas, monospace;
@@ -68,12 +69,12 @@
 :root[data-palette="popcorn"] {
   --bg: #fbf6e9; --surface: #fffdf6; --sunk: #f3ead3; --line: #e3d6b4;
   --fg: #2b2214; --muted: #786a4f; --display: #c8361d; --accent: #9c6200;
-  --on-accent: #ffffff; --bulb: #e9a21a; --danger: #b3261e; color-scheme: light;
+  --on-accent: #ffffff; --bulb: #e9a21a; --danger: #b3261e; --good: #23863a; color-scheme: light;
 }
 :root[data-palette="arthouse"] {
   --bg: #eef0ec; --surface: #fafbf8; --sunk: #e2e6df; --line: #cfd5cb;
   --fg: #1d241f; --muted: #5f6b62; --display: #2f6b4f; --accent: #9a6418;
-  --on-accent: #ffffff; --bulb: #c9862b; --danger: #b3261e; color-scheme: light;
+  --on-accent: #ffffff; --bulb: #c9862b; --danger: #b3261e; --good: #23863a; color-scheme: light;
 }
 
 * { box-sizing: border-box; }
@@ -211,7 +212,7 @@ section { display: grid; gap: 16px; min-width: 0; }
 .votes button.up[aria-pressed="true"] { color: #0d1f14; background: #8fd694; }
 .votes button.down[aria-pressed="true"] { color: #1a0a08; background: #e74c3c; }
 .votes .net { min-width: 22px; text-align: center; font-family: var(--font-data); font-size: 13px; font-weight: 500; }
-.votes .net.pos { color: var(--fg); }
+.votes .net.pos { color: var(--good); }
 .votes .net.neg { color: var(--danger); }
 
 /* Schedule */
@@ -1548,6 +1549,7 @@ function customVars(c) {
     "on-accent": contrast(c.accent, "#000000") >= contrast(c.accent, "#ffffff") ? "#111111" : "#ffffff",
     bulb: c.accent,
     danger: dark ? "#ff8a7a" : "#b3261e",
+    good: dark ? "#6fcf7f" : "#23863a",
     "color-scheme": dark ? "dark" : "light"
   };
 }
