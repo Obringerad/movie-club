@@ -344,6 +344,10 @@ dialog h3 { margin: 0; font-family: var(--font-display); font-weight: 400; font-
 .palette .note { font-size: 12px; color: var(--muted); }
 
 /* Toast */
+.toast-btn { font: inherit; color: inherit; background: none; border: 1px solid currentColor; border-radius: 5px; padding: 2px 10px; margin-left: 12px; cursor: pointer; }
+.toast-btn:hover { background: color-mix(in oklab, currentColor 15%, transparent); }
+.unwatch-note { margin: 0; font-size: 14px; color: var(--muted); }
+.unwatch-note b { color: var(--fg); font-weight: 600; }
 .toast { position: fixed; left: 50%; bottom: calc(20px + env(safe-area-inset-bottom, 0px)); transform: translateX(-50%); background: var(--fg); color: var(--bg); padding: 10px 16px; border-radius: 8px; font-weight: 600; font-size: 14px; max-width: calc(100vw - 32px); z-index: 10; box-shadow: 0 6px 24px rgb(0 0 0 / .25); }
 
 footer { color: var(--muted); font-size: 13px; text-align: center; padding-top: 24px; }
@@ -428,6 +432,7 @@ footer { color: var(--muted); font-size: 13px; text-align: center; padding-top: 
           <h2 id="watched-h">Already watched</h2>
           <p id="watched-sub"></p>
         </div>
+        <p class="unwatch-note" id="unwatch-note" hidden></p>
         <div class="scroll">
           <table class="watched">
             <thead><tr id="watched-head"></tr></thead>
@@ -573,9 +578,18 @@ const posterImg = (s, cls = "") => hasPoster(s) ? `<img class="poster ${cls}" sr
 const isPicker = (slot, name) => !!name && (slot.picker || "").split(/\s*&\s*/).includes(name);
 
 let toastTimer;
-function toast(msg) {
-  const t = $("toast"); t.textContent = msg; t.hidden = false;
-  clearTimeout(toastTimer); toastTimer = setTimeout(() => { t.hidden = true; }, 3400);
+// action: optional {label, run} shown as a button in the message (e.g. Undo).
+function toast(msg, action) {
+  const t = $("toast");
+  t.textContent = msg;
+  if (action) {
+    const b = document.createElement("button");
+    b.type = "button"; b.className = "toast-btn"; b.textContent = action.label;
+    b.addEventListener("click", () => { t.hidden = true; clearTimeout(toastTimer); action.run(); });
+    t.append(b);
+  }
+  t.hidden = false;
+  clearTimeout(toastTimer); toastTimer = setTimeout(() => { t.hidden = true; }, action ? 7000 : 3400);
 }
 function showStatus(title, body) {
   $("status").hidden = false; $("content").hidden = true;
@@ -851,6 +865,9 @@ const sorters = {
   runtime: (a, b) => (a.mins || 0) - (b.mins || 0)
 };
 function renderWatched({ C, watched }) {
+  const latest = watched[watched.length - 1];
+  $("unwatch-note").hidden = !(me && latest);
+  if (me && latest) $("unwatch-note").innerHTML = `Latest watched: <b>${esc(latest.title)}</b> (${fmt(latest.date, { month: "short", day: "numeric" })}). Marked by mistake? <button class="link-btn" type="button" data-act="unwatch" data-id="${latest.date}">Move it back to Next up</button>`;
   const rated = watched.filter(f => f.avg != null);
   if (rated.length) {
     const best = rated.reduce((a, b) => (b.avg > a.avg ? b : a));
@@ -1160,10 +1177,17 @@ document.addEventListener("click", e => {
     return;
   }
   if (act === "watched") {
-    write(() => sb.from("slots").update({ watched: true }).eq("date", slot.date),
-      `${slot.title} moved to the Ratings tab. Rate it there.`);
+    write(() => sb.from("slots").update({ watched: true }).eq("date", slot.date))
+      .then(ok => { if (ok) toast(`${slot.title} moved to the Ratings tab.`, { label: "Undo", run: () => unwatch(slot) }); });
+    return;
   }
+  if (act === "unwatch") return unwatch(slot);
 });
+
+// Put a film marked watched by mistake back in the Next up spot. Its ratings are kept.
+function unwatch(slot) {
+  write(() => sb.from("slots").update({ watched: false }).eq("date", slot.date), `${slot.title} is back in Next up`);
+}
 
 /* ---------- login ---------- */
 function openLogin() {
