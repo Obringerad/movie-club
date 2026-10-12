@@ -395,6 +395,14 @@ dialog h3 { margin: 0; font-family: var(--font-display); font-weight: 400; font-
 .search-results { list-style: none; margin: 4px 0 0; padding: 0; display: grid; gap: 4px; max-height: 260px; overflow-y: auto; }
 .search-results button { font: inherit; color: var(--fg); width: 100%; display: grid; grid-template-columns: 34px minmax(0, 1fr); gap: 10px; align-items: center; text-align: left; padding: 5px; border-radius: 6px; border: 1px solid var(--line); background: var(--bg); cursor: pointer; }
 .search-results button:hover, .search-results button:focus-visible { border-color: var(--accent); }
+.poster-pick { display: grid; grid-template-columns: 64px minmax(0, 1fr); gap: 12px; align-items: center; }
+.poster-pick .poster { width: 64px; }
+.poster-pick .actions { display: grid; gap: 4px; justify-items: start; }
+.poster-grid { list-style: none; margin: 6px 0 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(72px, 1fr)); gap: 8px; max-height: 300px; overflow-y: auto; }
+.poster-grid button { display: block; width: 100%; padding: 0; border: 2px solid transparent; border-radius: 5px; background: var(--sunk); cursor: pointer; }
+.poster-grid button:hover, .poster-grid button:focus-visible { border-color: var(--accent); }
+.poster-grid button[aria-pressed="true"] { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent); }
+.poster-grid img { display: block; width: 100%; aspect-ratio: 2 / 3; object-fit: cover; border-radius: 3px; }
 .search-results .thumb { width: 34px; aspect-ratio: 2 / 3; object-fit: cover; border-radius: 3px; background: var(--sunk); display: block; }
 .search-results b { display: block; font-weight: 600; overflow-wrap: anywhere; }
 .search-results small { color: var(--muted); font-size: 12px; }
@@ -729,6 +737,17 @@ footer { color: var(--muted); font-size: 13px; text-align: center; padding-top: 
       <label for="f-imdb">IMDb link</label>
       <input id="f-imdb" autocomplete="off" placeholder="https://www.imdb.com/title/tt0118694/">
       <span class="help" id="imdb-help">Paste the film's IMDb page link.</span>
+    </div>
+    <div class="field" id="poster-field" hidden>
+      <span class="label">Poster</span>
+      <div class="poster-pick">
+        <img class="poster" id="f-poster-img" alt="" referrerpolicy="no-referrer">
+        <div class="actions">
+          <button class="btn small" type="button" id="poster-more">Choose a different poster</button>
+          <span class="help" id="poster-help"></span>
+        </div>
+      </div>
+      <ul class="poster-grid" id="poster-grid" hidden></ul>
     </div>
     <div class="field">
       <label for="f-title">Film title</label>
@@ -2130,6 +2149,8 @@ function openEditor(slot) {
   $("f-watched").checked = !!slot.watched;
   $("editor-clear").hidden = !slot.title;
   $("editor-error").hidden = true;
+  $("poster-grid").hidden = true; $("poster-grid").innerHTML = ""; $("poster-help").textContent = "";
+  showEditorPoster();
   $("imdb-help").textContent = "Paste the film's IMDb link and the details below fill in.";
   $("f-search").value = "";
   $("search-results").innerHTML = "";
@@ -2177,12 +2198,53 @@ async function filmByImdb(imdbId) {
 }
 
 // Put a film's details into the form. fresh = replace what's there (a different film); otherwise only fill blanks.
+// Poster preview and picker in the edit form.
+function showEditorPoster() {
+  const url = editorPoster !== undefined ? editorPoster : editing?.poster;
+  const has = !!url && url !== "none";
+  $("poster-field").hidden = !(has || /tt\d{5,10}/.test($("f-imdb").value)) || !TMDB_KEY;
+  $("f-poster-img").src = has ? url : "";
+  $("f-poster-img").style.visibility = has ? "visible" : "hidden";
+}
+$("poster-more").addEventListener("click", async () => {
+  const m = $("f-imdb").value.match(/tt\d{5,10}/);
+  if (!m) { $("poster-help").textContent = "Pick the film first."; return; }
+  $("poster-help").textContent = "Loading posters…";
+  try {
+    const found = await tmdb(`/find/${m[0]}`, { external_source: "imdb_id" });
+    const movie = (found.movie_results || [])[0];
+    if (!movie) throw new Error("not found");
+    const imgs = await tmdb(`/movie/${movie.id}/images`);
+    // English and textless first, then the rest; best-voted first within each.
+    const rank = x => (x.iso_639_1 === "en" ? 0 : x.iso_639_1 == null ? 1 : 2);
+    const posters = (imgs.posters || []).sort((a, b) => rank(a) - rank(b) || b.vote_average - a.vote_average).slice(0, 30);
+    if (!posters.length) { $("poster-help").textContent = "No other posters for this film."; return; }
+    const current = $("f-poster-img").src;
+    $("poster-grid").innerHTML = posters.map(x => {
+      const big = tmdbImg(x.file_path, "w500");
+      return `<li><button type="button" data-poster="${esc(big)}" aria-label="Use this poster" aria-pressed="${current === big}"><img src="${esc(tmdbImg(x.file_path, "w185"))}" alt="" loading="lazy"></button></li>`;
+    }).join("");
+    $("poster-grid").hidden = false;
+    $("poster-help").textContent = `${posters.length} posters. Pick one, then save.`;
+  } catch (e) {
+    $("poster-help").textContent = "Couldn't load other posters right now. Try again in a moment.";
+  }
+});
+$("poster-grid").addEventListener("click", e => {
+  const b = e.target.closest("[data-poster]"); if (!b) return;
+  editorPoster = b.dataset.poster;
+  $("poster-grid").querySelectorAll("[aria-pressed]").forEach(x => x.setAttribute("aria-pressed", x === b ? "true" : "false"));
+  showEditorPoster();
+  $("poster-help").textContent = "Poster chosen. Save to keep it.";
+});
+
 function fillForm(f, fresh) {
   const set = (el, v) => { if (v && (fresh || !$(el).value.trim())) $(el).value = v; };
   set("f-title", f.title); set("f-director", f.director); set("f-genre", f.genre);
   if (f.mins) set("f-mins", String(f.mins));
   if (f.imdb) $("f-imdb").value = imdbUrl(f.imdb);
   editorPoster = f.poster || "none";
+  showEditorPoster();
   $("imdb-help").textContent = `Filled in: ${f.title}${f.year ? ` (${f.year})` : ""}.`;
 }
 async function fillFromImdb(id, fresh) {
