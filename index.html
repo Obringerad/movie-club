@@ -523,6 +523,16 @@ footer { color: var(--muted); font-size: 13px; text-align: center; padding-top: 
           <h2 id="mem-h">The critics</h2>
           <p>Averages count only the films each person rated. Taste twins compare films both people rated (3 or more).</p>
         </div>
+        <div class="watch-controls">
+          <div class="seg" role="group" aria-label="Sort critics" id="critics-sort">
+            <button type="button" data-sort="me" id="critics-sort-me">You first</button>
+            <button type="button" data-sort="highest">Highest</button>
+            <button type="button" data-sort="lowest">Lowest</button>
+            <button type="button" data-sort="rated">Most rated</button>
+            <button type="button" data-sort="missed">Most missed</button>
+            <button type="button" data-sort="az">A–Z</button>
+          </div>
+        </div>
         <div class="members" id="members"></div>
       </section>
     </div>
@@ -696,6 +706,7 @@ let session = null;
 let showAll = false;
 let sortMode = "newest";              // newest | highest | lowest | az
 let onlyUnrated = false;              // "Not rated by me" filter
+let criticsSort = "me";               // me | highest | lowest | rated | missed | az
 let tab = "next";
 const openFilms = new Set();          // expanded rows in the watched table
 const drafts = {};                    // unsaved review text, by film date
@@ -1141,7 +1152,21 @@ function renderMembers({ C, watched }) {
     card.reviews = reviews.length;
     card.latest = reviews[0] || null;
     return card;
-  }).sort((a, b) => (b.avg ?? -1) - (a.avg ?? -1));
+  });
+  // Sort: "You first" (the default when logged in) puts your card first, then everyone by average.
+  const mode = criticsSort === "me" && !me ? "highest" : criticsSort;
+  const byAvg = (a, b) => (b.avg ?? -1) - (a.avg ?? -1);
+  const sorters = {
+    me: (a, b) => (b.name === me) - (a.name === me) || byAvg(a, b),
+    highest: byAvg,
+    lowest: (a, b) => (a.avg ?? 99) - (b.avg ?? 99),
+    rated: (a, b) => b.count - a.count || byAvg(a, b),
+    missed: (a, b) => b.missed - a.missed || a.name.localeCompare(b.name),
+    az: (a, b) => a.name.localeCompare(b.name)
+  };
+  cards.sort(sorters[mode]);
+  $("critics-sort-me").hidden = !me;
+  $("critics-sort").querySelectorAll("[data-sort]").forEach(b => b.setAttribute("aria-pressed", b.dataset.sort === mode ? "true" : "false"));
 
   const extreme = (label, r) => r ? `
     <div class="extreme ${hasPoster(r.f) ? "" : "no-poster"}">
@@ -1337,6 +1362,11 @@ $("watch-sort").addEventListener("click", e => {
   render();
 });
 $("only-unrated").addEventListener("change", e => { onlyUnrated = e.target.checked; render(); });
+$("critics-sort").addEventListener("click", e => {
+  const b = e.target.closest("[data-sort]"); if (!b) return;
+  criticsSort = b.dataset.sort;
+  render();
+});
 document.addEventListener("input", e => { const d = e.target.dataset && e.target.dataset.review; if (d) drafts[d] = e.target.value; });
 document.addEventListener("keydown", e => {
   const d = e.target.dataset && e.target.dataset.review;
