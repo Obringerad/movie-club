@@ -10,9 +10,10 @@
   // Apply the saved palette before the page paints, so it never flashes the default.
   try {
     const p = localStorage.getItem("jboiz-palette");
-    if (p && p !== "charcoal") document.documentElement.dataset.palette = p;
-    if (p === "custom") {
-      const c = JSON.parse(localStorage.getItem("jboiz-custom-palette") || "null");
+    if (p && p !== "charcoal") document.documentElement.dataset.palette = p.startsWith("custom") ? "custom" : p;
+    if (p && p.startsWith("custom")) {
+      const list = JSON.parse(localStorage.getItem("jboiz-custom-palettes") || "null");
+      const c = (list && list.find(x => "custom:" + x.id === p)) || JSON.parse(localStorage.getItem("jboiz-custom-palette") || "null");
       if (c && c.vars) {
         for (const [k, v] of Object.entries(c.vars)) document.documentElement.style.setProperty("--" + k, v);
         document.documentElement.style.colorScheme = c.vars["color-scheme"] || "";
@@ -422,6 +423,8 @@ dialog h3 { margin: 0; font-family: var(--font-display); font-weight: 400; font-
 .custom-import input { font: inherit; font-size: 14px; flex: 1 1 220px; min-width: 0; padding: 6px 10px; border-radius: 6px; border: 1px solid var(--line); background: var(--bg); color: var(--fg); }
 .custom-share .note { font-size: 13px; color: var(--muted); width: 100%; margin: 0; }
 .custom-share .note.err { color: var(--danger); }
+#custom-delete.confirm { background: var(--danger); color: #fff; border-color: transparent; }
+.custom-editor .field input { font: inherit; padding: 7px 10px; border-radius: 6px; border: 1px solid var(--line); background: var(--bg); color: var(--fg); }
 
 /* Party mode: images members drop on the page */
 /* Above everything on the page (tabs included); only messages, the poster preview and dialogs go higher. */
@@ -661,8 +664,20 @@ footer { color: var(--muted); font-size: 13px; text-align: center; padding-top: 
   <form id="settings-form" novalidate>
     <h3 id="settings-h">Settings</h3>
     <fieldset class="palettes" id="palettes"></fieldset>
+    <div class="custom-share">
+      <button class="btn small" type="button" id="custom-import-open">Import a palette</button>
+      <div class="custom-import" id="custom-import" hidden>
+        <input id="custom-import-text" autocomplete="off" placeholder="Paste a share link or color code" aria-label="Share link or color code">
+        <button class="btn small primary" type="button" id="custom-import-go">Add it</button>
+      </div>
+      <p class="note" id="custom-import-note" aria-live="polite"></p>
+    </div>
     <div class="custom-editor" id="custom-editor" hidden>
-      <span class="label">Your colors</span>
+      <div class="field">
+        <label for="c-name">Palette name</label>
+        <input id="c-name" maxlength="40" autocomplete="off">
+      </div>
+      <span class="label">Colors</span>
       <div class="custom-grid">
         <label class="color-field"><input type="color" id="c-bg" data-key="bg"><span>Background<small>Behind everything</small></span></label>
         <label class="color-field"><input type="color" id="c-surface" data-key="surface"><span>Cards<small>Boxes and panels</small></span></label>
@@ -674,10 +689,9 @@ footer { color: var(--muted); font-size: 13px; text-align: center; padding-top: 
       <button class="link-btn" type="button" id="custom-reset" style="justify-self:start">Start over from Charcoal</button>
       <div class="custom-share">
         <button class="btn small" type="button" id="custom-copy">Copy share link</button>
-        <button class="btn small" type="button" id="custom-import-open">Import a palette</button>
-        <div class="custom-import" id="custom-import" hidden>
-          <input id="custom-import-text" autocomplete="off" placeholder="Paste a share link or color code" aria-label="Share link or color code">
-          <button class="btn small primary" type="button" id="custom-import-go">Use it</button>
+        <button class="btn small danger" type="button" id="custom-delete">Delete palette</button>
+        <div class="custom-import" id="custom-link" hidden>
+          <input id="custom-link-text" readonly aria-label="Share link">
         </div>
         <p class="note" id="custom-share-note" aria-live="polite"></p>
       </div>
@@ -742,6 +756,7 @@ const OMDB_KEY = CFG.omdbApiKey && !CFG.omdbApiKey.startsWith("PASTE") ? CFG.omd
 const TMDB_KEY = CFG.tmdbApiKey || "";
 // A palette shared by link (?palette=...). Read now, before the tab code rewrites the address.
 const SHARED_PALETTE = new URLSearchParams(location.search).get("palette");
+const SHARED_PALETTE_NAME = new URLSearchParams(location.search).get("name");
 
 /* ---------- helpers ---------- */
 const $ = id => document.getElementById(id);
@@ -1579,8 +1594,50 @@ function customVars(c) {
     "color-scheme": dark ? "dark" : "light"
   };
 }
-function loadCustom() { try { return JSON.parse(localStorage.getItem("jboiz-custom-palette") || "null"); } catch (e) { return null; } }
-function saveCustom(base) { try { localStorage.setItem("jboiz-custom-palette", JSON.stringify({ base, vars: customVars(base) })); } catch (e) {} }
+// Saved custom palettes: [{id, name, base: {five colors}, vars: {all tokens}}], kept per browser.
+// The active palette is "charcoal", a built-in id, or "custom:<id>".
+function loadPalettes() {
+  let list = null;
+  try { list = JSON.parse(localStorage.getItem("jboiz-custom-palettes") || "null"); } catch (e) {}
+  if (!Array.isArray(list)) {
+    // Carry over the single Custom palette from before palettes had names.
+    list = [];
+    try {
+      const old = JSON.parse(localStorage.getItem("jboiz-custom-palette") || "null");
+      if (old && old.base) {
+        list.push({ id: "mine", name: "My palette", base: old.base, vars: customVars(old.base) });
+        if (localStorage.getItem("jboiz-palette") === "custom") localStorage.setItem("jboiz-palette", "custom:mine");
+      }
+      localStorage.setItem("jboiz-custom-palettes", JSON.stringify(list));
+    } catch (e) {}
+  }
+  return list;
+}
+function savePalettes(list) { try { localStorage.setItem("jboiz-custom-palettes", JSON.stringify(list)); } catch (e) {} }
+function uniqueName(name, list, exceptId) {
+  const taken = new Set(list.filter(x => x.id !== exceptId).map(x => x.name.toLowerCase()));
+  let n = name.trim() || "My palette", i = 2, out = n;
+  while (taken.has(out.toLowerCase())) out = `${n} (${i++})`;
+  return out;
+}
+function addPalette(name, base) {
+  const list = loadPalettes();
+  const entry = { id: Date.now().toString(36) + Math.random().toString(36).slice(2, 5), name: uniqueName(name, list), base, vars: customVars(base) };
+  list.push(entry); savePalettes(list);
+  return entry;
+}
+function activeCustom() {
+  const cur = currentPalette();
+  return cur.startsWith("custom:") ? loadPalettes().find(x => "custom:" + x.id === cur) || null : null;
+}
+function updateActive(patch) {
+  const list = loadPalettes(), cur = activeCustom(); if (!cur) return null;
+  const e = list.find(x => x.id === cur.id);
+  Object.assign(e, patch);
+  if (patch.base) e.vars = customVars(e.base);
+  savePalettes(list);
+  return e;
+}
 function setCustomVars(base) {
   const root = document.documentElement.style;
   for (const [k, v] of Object.entries(customVars(base))) root.setProperty("--" + k, v);
@@ -1588,10 +1645,10 @@ function setCustomVars(base) {
 }
 function clearCustomVars() {
   const root = document.documentElement.style;
-  for (const k of Object.keys(customVars({ bg: "#000000", surface: "#000000", fg: "#000000", accent: "#000000", display: "#000000" }))) root.removeProperty("--" + k);
+  for (const k of Object.keys(customVars(CHARCOAL))) root.removeProperty("--" + k);
   root.colorScheme = "";
 }
-// Read the colors currently on screen, so Custom starts from whatever palette you had.
+// Read the colors currently on screen, so a new palette starts from whatever you had.
 function currentColors() {
   const cs = getComputedStyle(document.documentElement);
   const toHex = v => { v = v.trim(); if (/^#[0-9a-f]{6}$/i.test(v)) return v.toLowerCase(); if (/^#[0-9a-f]{3}$/i.test(v)) return "#" + [...v.slice(1)].map(x => x + x).join(""); return "#808080"; };
@@ -1599,13 +1656,18 @@ function currentColors() {
 }
 const CHARCOAL = { bg: "#1c1d20", surface: "#26282c", fg: "#ecebe8", accent: "#f2b544", display: "#f2b544" };
 
-function currentPalette() { return document.documentElement.dataset.palette || "charcoal"; }
+function currentPalette() {
+  let p = "charcoal";
+  try { p = localStorage.getItem("jboiz-palette") || "charcoal"; } catch (e) {}
+  if (p === "custom") { loadPalettes(); try { p = localStorage.getItem("jboiz-palette") || "charcoal"; } catch (e) {} }
+  return p;
+}
 function applyPalette(id) {
-  if (id === "custom") {
-    let saved = loadCustom();
-    if (!saved) { saveCustom(currentColors()); saved = loadCustom(); }
+  const entry = id.startsWith("custom:") ? loadPalettes().find(x => "custom:" + x.id === id) : null;
+  if (id.startsWith("custom:") && !entry) id = "charcoal";
+  if (entry) {
     document.documentElement.dataset.palette = "custom";
-    setCustomVars(saved.base);
+    setCustomVars(entry.base);
   } else {
     clearCustomVars();
     if (id === "charcoal") delete document.documentElement.dataset.palette;
@@ -1615,10 +1677,11 @@ function applyPalette(id) {
   syncCustomEditor();
 }
 function syncCustomEditor() {
-  const on = currentPalette() === "custom";
-  $("custom-editor").hidden = !on;
-  if (!on) return;
-  const base = (loadCustom() || { base: currentColors() }).base;
+  const entry = activeCustom();
+  $("custom-editor").hidden = !entry;
+  if (!entry) return;
+  const base = entry.base;
+  if (document.activeElement !== $("c-name")) $("c-name").value = entry.name;
   CUSTOM_KEYS.forEach(k => { $("c-" + k).value = base[k]; });
   const warn = [];
   if (contrast(base.fg, base.bg) < 4.5) warn.push("text on the background");
@@ -1626,89 +1689,151 @@ function syncCustomEditor() {
   if (contrast(base.display, base.bg) < 3) warn.push("headings on the background");
   $("custom-warn").hidden = !warn.length;
   $("custom-warn").textContent = warn.length ? `Hard to read: ${warn.join(", ")}. Try a lighter or darker color.` : "";
-  // Keep the Custom tile's swatch in step.
-  const sw = $("palettes").querySelector('input[value="custom"]')?.closest(".palette")?.querySelector(".sw");
-  if (sw) sw.innerHTML = swatchInner(base.bg, base.surface, base.accent, base.display);
+  // Keep this palette's tile in step.
+  const tile = $("palettes").querySelector(`input[value="custom:${entry.id}"]`)?.closest(".palette");
+  if (tile) {
+    tile.querySelector(".sw").innerHTML = swatchInner(base.bg, base.surface, base.accent, base.display);
+    tile.querySelector(".name").textContent = entry.name;
+  }
 }
 const swatchInner = (bg, surface, accent, display) => `<span style="background:${bg}"></span><span style="background:${surface}"></span><span style="background:linear-gradient(${display} 50%, ${accent} 50%)"></span>`;
 function openSettings() {
   const cur = currentPalette();
-  const custom = (loadCustom() || { base: currentColors() }).base;
-  const all = [...PALETTES, ["custom", "Custom", "Pick your own colors", custom.bg, custom.surface, custom.accent, custom.display]];
-  $("palettes").innerHTML = `<legend class="label">Color palette</legend>` + all.map(([id, name, note, bg, surface, accent, display]) => `
+  const mine = loadPalettes().map(x => [`custom:${x.id}`, x.name, x.imported ? "Imported" : "Yours", x.base.bg, x.base.surface, x.base.accent, x.base.display]);
+  const tile = ([id, name, note, bg, surface, accent, display]) => `
     <label class="palette">
-      <input type="radio" name="palette" value="${id}"${id === cur ? " checked" : ""}>
+      <input type="radio" name="palette" value="${esc(id)}"${id === cur ? " checked" : ""}>
       <span class="sw" aria-hidden="true">${swatchInner(bg, surface, accent, display)}</span>
-      <span class="name">${name}</span>
-      <span class="note">${note}</span>
-    </label>`).join("");
+      <span class="name">${esc(name)}</span>
+      <span class="note">${esc(note)}</span>
+    </label>`;
+  $("palettes").innerHTML = `<legend class="label">Color palette</legend>` + [...PALETTES, ...mine].map(tile).join("") + `
+    <label class="palette">
+      <input type="radio" name="palette" value="new">
+      <span class="sw" aria-hidden="true" style="display:grid;place-items:center;font-size:22px;color:var(--muted);border-style:dashed">+</span>
+      <span class="name">New palette</span>
+      <span class="note">Pick your own colors</span>
+    </label>`;
+  $("custom-share-note").textContent = ""; $("custom-link").hidden = true;
+  $("custom-delete").textContent = "Delete palette"; $("custom-delete").classList.remove("confirm");
   syncCustomEditor();
-  openDialog($("settings"));
+  if (!$("settings").open) openDialog($("settings"));
   $("palettes").querySelector("input:checked")?.focus();
 }
-$("palettes").addEventListener("change", e => { if (e.target.name === "palette") applyPalette(e.target.value); });
-$("custom-editor").addEventListener("input", e => {
-  const key = e.target.dataset && e.target.dataset.key; if (!key) return;
-  const base = { ...(loadCustom() || { base: currentColors() }).base, [key]: e.target.value };
-  saveCustom(base);
-  setCustomVars(base);
+$("palettes").addEventListener("change", e => {
+  if (e.target.name !== "palette") return;
+  if (e.target.value === "new") {
+    const entry = addPalette(`My palette ${loadPalettes().length + 1}`, currentColors());
+    applyPalette(`custom:${entry.id}`);
+    openSettings();
+    $("c-name").focus(); $("c-name").select();
+    return;
+  }
+  applyPalette(e.target.value);
+});
+$("c-name").addEventListener("input", () => {
+  const cur = activeCustom(); if (!cur) return;
+  updateActive({ name: $("c-name").value.trim() || cur.name });
   syncCustomEditor();
 });
-$("custom-reset").addEventListener("click", () => { saveCustom({ ...CHARCOAL }); setCustomVars(CHARCOAL); syncCustomEditor(); });
+$("c-name").addEventListener("change", () => {
+  // On leaving the box, make sure the name is filled in and not a copy of another palette's.
+  const cur = activeCustom(); if (!cur) return;
+  updateActive({ name: uniqueName($("c-name").value, loadPalettes(), cur.id) });
+  $("c-name").value = activeCustom().name;
+  syncCustomEditor();
+});
+$("custom-editor").addEventListener("input", e => {
+  const key = e.target.dataset && e.target.dataset.key; if (!key) return;
+  const cur = activeCustom(); if (!cur) return;
+  const entry = updateActive({ base: { ...cur.base, [key]: e.target.value } });
+  setCustomVars(entry.base);
+  syncCustomEditor();
+});
+$("custom-reset").addEventListener("click", () => { const e = updateActive({ base: { ...CHARCOAL } }); if (e) { setCustomVars(e.base); syncCustomEditor(); } });
+$("custom-delete").addEventListener("click", () => {
+  const b = $("custom-delete"), cur = activeCustom(); if (!cur) return;
+  if (!b.classList.contains("confirm")) { b.classList.add("confirm"); b.textContent = `Delete "${cur.name}"?`; return; }
+  savePalettes(loadPalettes().filter(x => x.id !== cur.id));
+  applyPalette("charcoal");
+  openSettings();
+  toast(`Deleted ${cur.name}`);
+});
 
-// Sharing: the five colors as a short code (bg-cards-text-accent-headings), carried in a link.
+// Sharing: the five colors as a short code (bg-cards-text-accent-headings) plus the name, carried in a link.
 const paletteCode = base => CUSTOM_KEYS.map(k => base[k].replace("#", "").toLowerCase()).join("-");
 function parsePalette(text) {
   const hex = String(text || "").match(/[0-9a-f]{6}(?![0-9a-f])/gi);
   if (!hex || hex.length < 5) return null;
-  // Take the last five, so a full link (whose address has no hex runs) or a bare code both work.
-  const five = hex.slice(-5).map(h => "#" + h.toLowerCase());
+  const five = hex.slice(0, 5).map(h => "#" + h.toLowerCase());
   return Object.fromEntries(CUSTOM_KEYS.map((k, i) => [k, five[i]]));
 }
-function useCustomPalette(base) {
-  saveCustom(base);
-  applyPalette("custom");
-  if ($("settings").open) openSettings();
+// Pull the palette (and its name, if any) out of a pasted link or a bare code.
+function parseShared(text) {
+  text = String(text || "").trim();
+  let code = text, name = "";
+  const q = text.indexOf("?");
+  if (q >= 0) {
+    const params = new URLSearchParams(text.slice(q + 1).split("#")[0]);
+    code = params.get("palette") || "";
+    name = params.get("name") || "";
+  }
+  const base = parsePalette(code);
+  return base ? { base, name: name.slice(0, 40) } : null;
 }
+// Add a shared palette as a new one (never replacing yours) and switch to it.
+function importShared({ base, name }) {
+  const entry = addPalette(name || "Shared palette", base);
+  updateEntry(entry.id, { imported: true });
+  applyPalette(`custom:${entry.id}`);
+  if ($("settings").open) openSettings();
+  return entry;
+}
+function updateEntry(id, patch) { const list = loadPalettes(); const e = list.find(x => x.id === id); if (e) { Object.assign(e, patch); savePalettes(list); } }
 function shareNote(msg, err) { const n = $("custom-share-note"); n.textContent = msg; n.classList.toggle("err", !!err); }
+function importNote(msg, err) { const n = $("custom-import-note"); n.textContent = msg; n.classList.toggle("err", !!err); }
 $("custom-copy").addEventListener("click", async () => {
-  const base = (loadCustom() || { base: currentColors() }).base;
-  const link = `${location.origin}${location.pathname}?palette=${paletteCode(base)}`;
+  const cur = activeCustom(); if (!cur) return;
+  const link = `${location.origin}${location.pathname}?palette=${paletteCode(cur.base)}&name=${encodeURIComponent(cur.name)}`;
   try {
     await navigator.clipboard.writeText(link);
-    shareNote("Link copied. Send it to the group; opening it offers your palette.");
+    $("custom-link").hidden = true;
+    shareNote(`Link to "${cur.name}" copied. Opening it adds the palette for whoever opens it.`);
   } catch (e) {
     // Clipboard blocked: show the link so it can be copied by hand.
-    $("custom-import").hidden = false;
-    $("custom-import-text").value = link;
-    $("custom-import-text").select();
-    shareNote("Copy the link above to share your palette.");
+    $("custom-link").hidden = false;
+    $("custom-link-text").value = link;
+    $("custom-link-text").select();
+    shareNote("Copy the link above to share this palette.");
   }
 });
 $("custom-import-open").addEventListener("click", () => {
   $("custom-import").hidden = false;
   $("custom-import-text").value = "";
-  shareNote("");
+  importNote("");
   $("custom-import-text").focus();
 });
 function importPalette() {
-  const base = parsePalette($("custom-import-text").value);
-  if (!base) return shareNote("That doesn't look like a palette link or code. It should contain five colors like 1c1d20-26282c-ecebe8-f2b544-f2b544.", true);
-  useCustomPalette(base);
+  const shared = parseShared($("custom-import-text").value);
+  if (!shared) return importNote("That doesn't look like a palette link or code. It should contain five colors like 1c1d20-26282c-ecebe8-f2b544-f2b544.", true);
+  const entry = importShared(shared);
   $("custom-import").hidden = true;
-  shareNote("Palette imported. It's now your Custom palette.");
+  importNote(`Added "${entry.name}". Your other palettes are unchanged.`);
 }
 $("custom-import-go").addEventListener("click", importPalette);
 $("custom-import-text").addEventListener("keydown", e => { if (e.key === "Enter") { e.preventDefault(); importPalette(); } });
 
 // Opening a shared link: offer the palette, then tidy the address.
 (() => {
-  const shared = SHARED_PALETTE;
-  if (!shared) return;
+  if (!SHARED_PALETTE) return;
   try { history.replaceState(null, "", location.pathname + location.hash); } catch (e) {}
-  const base = parsePalette(shared);
+  const base = parsePalette(SHARED_PALETTE);
   if (!base) return;
-  setTimeout(() => toast("Someone shared a color palette with you.", { label: "Use it", run: () => { useCustomPalette(base); toast("Palette applied. Change it any time in Settings."); } }), 600);
+  const name = (SHARED_PALETTE_NAME || "").slice(0, 40);
+  setTimeout(() => toast(name ? `Someone shared the palette "${name}" with you.` : "Someone shared a color palette with you.", {
+    label: "Add it",
+    run: () => { const e = importShared({ base, name }); toast(`Added "${e.name}". Switch palettes any time in Settings.`); }
+  }), 600);
 })();
 $("settings-form").addEventListener("submit", e => { e.preventDefault(); closeDialog($("settings")); });
 
