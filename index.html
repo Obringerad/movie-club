@@ -8,7 +8,17 @@
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect x='1' y='1' width='30' height='30' rx='6' fill='%234a1424' stroke='%23f2b544' stroke-width='2'/%3E%3Ctext x='16' y='23' font-size='18' text-anchor='middle' fill='%23f2b544' font-family='Arial Black,sans-serif'%3EJ%3C/text%3E%3C/svg%3E">
 <script>
   // Apply the saved palette before the page paints, so it never flashes the default.
-  try { const p = localStorage.getItem("jboiz-palette"); if (p && p !== "charcoal") document.documentElement.dataset.palette = p; } catch (e) {}
+  try {
+    const p = localStorage.getItem("jboiz-palette");
+    if (p && p !== "charcoal") document.documentElement.dataset.palette = p;
+    if (p === "custom") {
+      const c = JSON.parse(localStorage.getItem("jboiz-custom-palette") || "null");
+      if (c && c.vars) {
+        for (const [k, v] of Object.entries(c.vars)) document.documentElement.style.setProperty("--" + k, v);
+        document.documentElement.style.colorScheme = c.vars["color-scheme"] || "";
+      }
+    }
+  } catch (e) {}
 </script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -389,6 +399,12 @@ dialog h3 { margin: 0; font-family: var(--font-display); font-weight: 400; font-
 .palette .sw { display: grid; grid-template-columns: 2fr 1fr 1fr; height: 40px; border-radius: 5px; overflow: hidden; border: 1px solid rgb(127 127 127 / .3); }
 .palette .name { font-weight: 700; font-size: 14px; }
 .palette .note { font-size: 12px; color: var(--muted); }
+.custom-editor { display: grid; gap: 12px; padding: 14px; border: 1px solid var(--line); border-radius: 8px; background: var(--sunk); }
+.custom-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 10px; }
+.color-field { display: flex; align-items: center; gap: 10px; font-size: 14px; font-weight: 600; cursor: pointer; }
+.color-field input { width: 44px; height: 32px; padding: 0; border: 1px solid var(--line); border-radius: 6px; background: none; cursor: pointer; flex: none; }
+.color-field small { display: block; font-weight: 400; font-size: 12px; color: var(--muted); }
+.custom-warn { margin: 0; font-size: 13px; color: var(--danger); }
 
 /* Toast */
 .toast-btn { font: inherit; color: inherit; background: none; border: 1px solid currentColor; border-radius: 5px; padding: 2px 10px; margin-left: 12px; cursor: pointer; }
@@ -563,6 +579,18 @@ footer { color: var(--muted); font-size: 13px; text-align: center; padding-top: 
   <form id="settings-form" novalidate>
     <h3 id="settings-h">Settings</h3>
     <fieldset class="palettes" id="palettes"></fieldset>
+    <div class="custom-editor" id="custom-editor" hidden>
+      <span class="label">Your colors</span>
+      <div class="custom-grid">
+        <label class="color-field"><input type="color" id="c-bg" data-key="bg"><span>Background<small>Behind everything</small></span></label>
+        <label class="color-field"><input type="color" id="c-surface" data-key="surface"><span>Cards<small>Boxes and panels</small></span></label>
+        <label class="color-field"><input type="color" id="c-fg" data-key="fg"><span>Text</span></label>
+        <label class="color-field"><input type="color" id="c-accent" data-key="accent"><span>Accent<small>Stars, buttons, tabs</small></span></label>
+        <label class="color-field"><input type="color" id="c-display" data-key="display"><span>Headings</span></label>
+      </div>
+      <p class="custom-warn" id="custom-warn" hidden></p>
+      <button class="link-btn" type="button" id="custom-reset" style="justify-self:start">Start over from Charcoal</button>
+    </div>
     <p class="muted" style="margin:0;font-size:13px">Your choice is saved on this device only and doesn't change the site for anyone else.</p>
     <div class="dialog-actions">
       <div class="right"><button type="submit" class="btn primary">Done</button></div>
@@ -1165,25 +1193,102 @@ const PALETTES = [
   ["popcorn", "Popcorn", "Light: butter and red", "#fbf6e9", "#fffdf6", "#9c6200", "#c8361d"],
   ["arthouse", "Arthouse", "Light: sage and green", "#eef0ec", "#fafbf8", "#9a6418", "#2f6b4f"]
 ];
+// Custom palette: five picked colors; the rest are worked out from them.
+const CUSTOM_KEYS = ["bg", "surface", "fg", "accent", "display"];
+const hexRgb = h => [1, 3, 5].map(i => parseInt(h.slice(i, i + 2), 16));
+const rgbHex = c => "#" + c.map(v => Math.round(Math.max(0, Math.min(255, v))).toString(16).padStart(2, "0")).join("");
+const mixHex = (a, b, t) => { const x = hexRgb(a), y = hexRgb(b); return rgbHex(x.map((v, i) => v + (y[i] - v) * t)); };
+const lum = h => { const c = hexRgb(h).map(v => { v /= 255; return v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4; }); return 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2]; };
+const contrast = (a, b) => { const x = lum(a), y = lum(b); return (Math.max(x, y) + 0.05) / (Math.min(x, y) + 0.05); };
+function customVars(c) {
+  const dark = lum(c.bg) < 0.2;
+  return {
+    bg: c.bg, surface: c.surface, fg: c.fg, accent: c.accent, display: c.display,
+    sunk: mixHex(c.bg, c.surface, 0.45),
+    line: mixHex(c.surface, c.fg, 0.16),
+    muted: mixHex(c.fg, c.bg, 0.38),
+    "on-accent": contrast(c.accent, "#000000") >= contrast(c.accent, "#ffffff") ? "#111111" : "#ffffff",
+    bulb: c.accent,
+    danger: dark ? "#ff8a7a" : "#b3261e",
+    "color-scheme": dark ? "dark" : "light"
+  };
+}
+function loadCustom() { try { return JSON.parse(localStorage.getItem("jboiz-custom-palette") || "null"); } catch (e) { return null; } }
+function saveCustom(base) { try { localStorage.setItem("jboiz-custom-palette", JSON.stringify({ base, vars: customVars(base) })); } catch (e) {} }
+function setCustomVars(base) {
+  const root = document.documentElement.style;
+  for (const [k, v] of Object.entries(customVars(base))) root.setProperty("--" + k, v);
+  root.colorScheme = customVars(base)["color-scheme"];
+}
+function clearCustomVars() {
+  const root = document.documentElement.style;
+  for (const k of Object.keys(customVars({ bg: "#000000", surface: "#000000", fg: "#000000", accent: "#000000", display: "#000000" }))) root.removeProperty("--" + k);
+  root.colorScheme = "";
+}
+// Read the colors currently on screen, so Custom starts from whatever palette you had.
+function currentColors() {
+  const cs = getComputedStyle(document.documentElement);
+  const toHex = v => { v = v.trim(); if (/^#[0-9a-f]{6}$/i.test(v)) return v.toLowerCase(); if (/^#[0-9a-f]{3}$/i.test(v)) return "#" + [...v.slice(1)].map(x => x + x).join(""); return "#808080"; };
+  return Object.fromEntries(CUSTOM_KEYS.map(k => [k, toHex(cs.getPropertyValue("--" + k))]));
+}
+const CHARCOAL = { bg: "#1c1d20", surface: "#26282c", fg: "#ecebe8", accent: "#f2b544", display: "#f2b544" };
+
 function currentPalette() { return document.documentElement.dataset.palette || "charcoal"; }
 function applyPalette(id) {
-  if (id === "charcoal") delete document.documentElement.dataset.palette;
-  else document.documentElement.dataset.palette = id;
+  if (id === "custom") {
+    let saved = loadCustom();
+    if (!saved) { saveCustom(currentColors()); saved = loadCustom(); }
+    document.documentElement.dataset.palette = "custom";
+    setCustomVars(saved.base);
+  } else {
+    clearCustomVars();
+    if (id === "charcoal") delete document.documentElement.dataset.palette;
+    else document.documentElement.dataset.palette = id;
+  }
   try { localStorage.setItem("jboiz-palette", id); } catch (e) {}
+  syncCustomEditor();
 }
+function syncCustomEditor() {
+  const on = currentPalette() === "custom";
+  $("custom-editor").hidden = !on;
+  if (!on) return;
+  const base = (loadCustom() || { base: currentColors() }).base;
+  CUSTOM_KEYS.forEach(k => { $("c-" + k).value = base[k]; });
+  const warn = [];
+  if (contrast(base.fg, base.bg) < 4.5) warn.push("text on the background");
+  if (contrast(base.fg, base.surface) < 4.5) warn.push("text on cards");
+  if (contrast(base.display, base.bg) < 3) warn.push("headings on the background");
+  $("custom-warn").hidden = !warn.length;
+  $("custom-warn").textContent = warn.length ? `Hard to read: ${warn.join(", ")}. Try a lighter or darker color.` : "";
+  // Keep the Custom tile's swatch in step.
+  const sw = $("palettes").querySelector('input[value="custom"]')?.closest(".palette")?.querySelector(".sw");
+  if (sw) sw.innerHTML = swatchInner(base.bg, base.surface, base.accent, base.display);
+}
+const swatchInner = (bg, surface, accent, display) => `<span style="background:${bg}"></span><span style="background:${surface}"></span><span style="background:linear-gradient(${display} 50%, ${accent} 50%)"></span>`;
 function openSettings() {
   const cur = currentPalette();
-  $("palettes").innerHTML = `<legend class="label">Color palette</legend>` + PALETTES.map(([id, name, note, bg, surface, accent, display]) => `
+  const custom = (loadCustom() || { base: currentColors() }).base;
+  const all = [...PALETTES, ["custom", "Custom", "Pick your own colors", custom.bg, custom.surface, custom.accent, custom.display]];
+  $("palettes").innerHTML = `<legend class="label">Color palette</legend>` + all.map(([id, name, note, bg, surface, accent, display]) => `
     <label class="palette">
       <input type="radio" name="palette" value="${id}"${id === cur ? " checked" : ""}>
-      <span class="sw" aria-hidden="true"><span style="background:${bg}"></span><span style="background:${surface}"></span><span style="background:linear-gradient(${display} 50%, ${accent} 50%)"></span></span>
+      <span class="sw" aria-hidden="true">${swatchInner(bg, surface, accent, display)}</span>
       <span class="name">${name}</span>
       <span class="note">${note}</span>
     </label>`).join("");
+  syncCustomEditor();
   openDialog($("settings"));
   $("palettes").querySelector("input:checked")?.focus();
 }
 $("palettes").addEventListener("change", e => { if (e.target.name === "palette") applyPalette(e.target.value); });
+$("custom-editor").addEventListener("input", e => {
+  const key = e.target.dataset && e.target.dataset.key; if (!key) return;
+  const base = { ...(loadCustom() || { base: currentColors() }).base, [key]: e.target.value };
+  saveCustom(base);
+  setCustomVars(base);
+  syncCustomEditor();
+});
+$("custom-reset").addEventListener("click", () => { saveCustom({ ...CHARCOAL }); setCustomVars(CHARCOAL); syncCustomEditor(); });
 $("settings-form").addEventListener("submit", e => { e.preventDefault(); closeDialog($("settings")); });
 
 /* ---------- poster preview on hover ---------- */
