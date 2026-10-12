@@ -365,6 +365,14 @@ dialog h3 { margin: 0; font-family: var(--font-display); font-weight: 400; font-
 .field label { font-stretch: 75%; font-weight: 700; text-transform: uppercase; letter-spacing: .1em; font-size: 12px; color: var(--muted); }
 .field input, .field select { font: inherit; padding: 8px 10px; border-radius: 6px; border: 1px solid var(--line); background: var(--bg); color: var(--fg); width: 100%; }
 .field .help { font-size: 12px; color: var(--muted); }
+.search-results { list-style: none; margin: 4px 0 0; padding: 0; display: grid; gap: 4px; max-height: 260px; overflow-y: auto; }
+.search-results button { font: inherit; color: var(--fg); width: 100%; display: grid; grid-template-columns: 34px minmax(0, 1fr); gap: 10px; align-items: center; text-align: left; padding: 5px; border-radius: 6px; border: 1px solid var(--line); background: var(--bg); cursor: pointer; }
+.search-results button:hover, .search-results button:focus-visible { border-color: var(--accent); }
+.search-results .thumb { width: 34px; aspect-ratio: 2 / 3; object-fit: cover; border-radius: 3px; background: var(--sunk); display: block; }
+.search-results b { display: block; font-weight: 600; overflow-wrap: anywhere; }
+.search-results small { color: var(--muted); font-size: 12px; }
+.or-line { display: flex; align-items: center; gap: 10px; color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spacing: .1em; font-weight: 700; font-stretch: 75%; }
+.or-line::before, .or-line::after { content: ""; flex: 1; height: 1px; background: var(--line); }
 .row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
 .check { display: flex; gap: 8px; align-items: center; }
 .dialog-actions { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px; }
@@ -452,6 +460,7 @@ footer { color: var(--muted); font-size: 13px; text-align: center; padding-top: 
       <section aria-labelledby="sched-h">
         <div class="section-head">
           <h2 id="sched-h">Coming up</h2>
+          <button class="btn primary" type="button" id="pick-next" hidden>Pick your next movie</button>
           <p>Two screenings a week. Picks rotate in the pick order below. Log in to fill in your film.</p>
         </div>
         <ul class="schedule" id="schedule"></ul>
@@ -565,6 +574,13 @@ footer { color: var(--muted); font-size: 13px; text-align: center; padding-top: 
   <form id="editor-form" novalidate>
     <h3 id="editor-h">Edit screening</h3>
     <p class="muted" id="editor-when" style="margin:0"></p>
+    <div class="field" id="search-field">
+      <label for="f-search">Search for a film</label>
+      <input id="f-search" type="search" autocomplete="off" placeholder="Type a title, like Heat or Paprika">
+      <span class="help" id="search-help">Pick a result and everything below fills in.</span>
+      <ul class="search-results" id="search-results"></ul>
+    </div>
+    <div class="or-line" id="search-or">or</div>
     <div class="field">
       <label for="f-imdb">IMDb link</label>
       <input id="f-imdb" autocomplete="off" placeholder="https://www.imdb.com/title/tt0118694/">
@@ -806,9 +822,13 @@ function renderTurn({ watched, upcoming }) {
   if (mine) {
     const when = fmt(mine.date, { weekday: "short", month: "short", day: "numeric" });
     parts.push(mine.title
-      ? `<span class="item">Your next pick: <b>${esc(mine.title)}</b> · ${when}</span>`
-      : `<span class="item">Your pick for <b>${when}</b> isn't in yet <button class="chip-btn" type="button" data-act="edit" data-id="${mine.date}">Add it</button></span>`);
+      ? `<span class="item">Your next pick: <b>${esc(mine.title)}</b> · ${when} <button class="chip-btn" type="button" data-act="edit" data-id="${mine.date}">Change it</button></span>`
+      : `<span class="item">Your pick for <b>${when}</b> isn't in yet <button class="btn primary small" type="button" data-act="edit" data-id="${mine.date}">Pick your next movie</button></span>`);
   }
+  // The Schedule tab's button opens the same slot.
+  const pick = $("pick-next");
+  pick.hidden = !mine;
+  if (mine) { pick.dataset.act = "edit"; pick.dataset.id = mine.date; pick.textContent = mine.title ? "Change your next pick" : "Pick your next movie"; }
   el.hidden = !parts.length;
   el.innerHTML = `<span class="label">Your turn</span>${parts.join(`<span class="sep" aria-hidden="true"></span>`)}`;
 }
@@ -1331,12 +1351,13 @@ async function setSession(s) {
 
 /* ---------- posters and film details (OMDb) ---------- */
 const omdbCache = new Map();
+// OMDb can be slow or down; give up after 8 seconds rather than hang.
+const omdbFetch = url => fetch(url, { signal: AbortSignal.timeout ? AbortSignal.timeout(8000) : undefined }).then(r => { if (!r.ok) throw new Error(r.status); return r.json(); });
 async function omdb(id) {
   if (!OMDB_KEY) return null;
   if (omdbCache.has(id)) return omdbCache.get(id);
   try {
-    const res = await fetch(`https://www.omdbapi.com/?i=${encodeURIComponent(id)}&apikey=${encodeURIComponent(OMDB_KEY)}`);
-    const j = await res.json();
+    const j = await omdbFetch(`https://www.omdbapi.com/?i=${encodeURIComponent(id)}&apikey=${encodeURIComponent(OMDB_KEY)}`);
     const out = j.Response === "True" ? j : null;
     omdbCache.set(id, out);
     return out;
@@ -1379,9 +1400,62 @@ function openEditor(slot) {
   $("editor-clear").hidden = !slot.title;
   $("editor-error").hidden = true;
   $("imdb-help").textContent = OMDB_KEY ? "Paste the film's IMDb link and the details below fill in." : "Paste the film's IMDb page link.";
+  $("search-field").hidden = $("search-or").hidden = !OMDB_KEY;
+  $("f-search").value = "";
+  $("search-results").innerHTML = "";
+  $("search-help").textContent = "Pick a result and everything below fills in.";
   openDialog(dlg);
-  $("f-imdb").focus();
+  (OMDB_KEY ? $("f-search") : $("f-imdb")).focus();
 }
+
+// Fill the form from IMDb. fresh = replace what's there (a different film); otherwise only fill blanks.
+async function fillFromImdb(id, fresh) {
+  $("imdb-help").textContent = "Looking up the film…";
+  const j = await omdb(id);
+  if (!j) { $("imdb-help").textContent = "Couldn't find that film's details. Fill them in below."; return; }
+  const set = (el, v) => { if (v && v !== "N/A" && (fresh || !$(el).value.trim())) $(el).value = v; };
+  set("f-title", j.Title); set("f-director", j.Director); set("f-genre", j.Genre);
+  const mins = parseInt(j.Runtime, 10); if (mins > 0) set("f-mins", String(mins));
+  editorPoster = omdbPoster(j);
+  $("imdb-help").textContent = `Filled in from IMDb: ${j.Title}${j.Year ? ` (${j.Year})` : ""}.`;
+}
+
+// Title search (OMDb), debounced; the newest search wins.
+let searchTimer, searchSeq = 0;
+$("f-search").addEventListener("input", () => {
+  clearTimeout(searchTimer);
+  const q = $("f-search").value.trim();
+  if (q.length < 2) { $("search-results").innerHTML = ""; $("search-help").textContent = "Pick a result and everything below fills in."; return; }
+  searchTimer = setTimeout(async () => {
+    const seq = ++searchSeq;
+    $("search-help").textContent = "Searching…";
+    let found = [];
+    try {
+      const j = await omdbFetch(`https://www.omdbapi.com/?s=${encodeURIComponent(q)}&apikey=${encodeURIComponent(OMDB_KEY)}`);
+      found = j.Response === "True" ? j.Search.slice(0, 8) : [];
+    } catch (e) {
+      if (seq === searchSeq) $("search-help").textContent = "Film search isn't responding right now. Paste the IMDb link below, or type the details in.";
+      return;
+    }
+    if (seq !== searchSeq) return;
+    $("search-help").textContent = found.length ? "Pick a result and everything below fills in." : `No films found for "${q}". Try a shorter title.`;
+    $("search-results").innerHTML = found.map(r => `
+      <li><button type="button" data-pick="${esc(r.imdbID)}">
+        ${r.Poster && r.Poster.startsWith("https://") ? `<img class="thumb" src="${esc(r.Poster)}" alt="" loading="lazy" referrerpolicy="no-referrer">` : `<span class="thumb"></span>`}
+        <span><b>${esc(r.Title)}</b><small>${esc(r.Year)}${r.Type && r.Type !== "movie" ? ` · ${esc(r.Type)}` : ""}</small></span>
+      </button></li>`).join("");
+  }, 350);
+});
+$("search-results").addEventListener("click", async e => {
+  const b = e.target.closest("[data-pick]"); if (!b) return;
+  const id = b.dataset.pick;
+  $("f-imdb").value = imdbUrl(id);
+  $("search-results").innerHTML = "";
+  $("f-search").value = "";
+  $("search-help").textContent = "Pick a result and everything below fills in.";
+  await fillFromImdb(id, true);
+  $("f-title").focus();
+});
 let imdbTimer;
 $("f-imdb").addEventListener("input", () => {
   clearTimeout(imdbTimer);
@@ -1389,17 +1463,11 @@ $("f-imdb").addEventListener("input", () => {
     const m = $("f-imdb").value.match(/tt\d{5,10}/);
     if (!m || !OMDB_KEY) return;
     if (editing && m[0] !== editing.imdb) editorPoster = null;
-    $("imdb-help").textContent = "Looking up the film…";
-    const j = await omdb(m[0]);
-    if (!j) { $("imdb-help").textContent = "Couldn't find that film's details. Fill them in below."; return; }
-    // Replace details when the link points at a different film; otherwise only fill blanks.
-    const fresh = !editing || m[0] !== editing.imdb;
-    const set = (id, v) => { if (v && v !== "N/A" && (fresh || !$(id).value.trim())) $(id).value = v; };
-    set("f-title", j.Title); set("f-director", j.Director); set("f-genre", j.Genre);
-    const mins = parseInt(j.Runtime, 10); if (mins > 0) set("f-mins", String(mins));
-    editorPoster = omdbPoster(j);
-    $("imdb-help").textContent = `Filled in from IMDb: ${j.Title}${j.Year ? ` (${j.Year})` : ""}.`;
+    await fillFromImdb(m[0], !editing || m[0] !== editing.imdb);
   }, 400);
+});
+$("f-search").addEventListener("keydown", e => {
+  if (e.key === "Enter") { e.preventDefault(); $("search-results").querySelector("button")?.click(); }
 });
 function formError(msg) { const el = $("editor-error"); el.textContent = msg; el.hidden = false; }
 $("editor-form").addEventListener("submit", e => {
