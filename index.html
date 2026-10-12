@@ -407,7 +407,8 @@ dialog h3 { margin: 0; font-family: var(--font-display); font-weight: 400; font-
 .custom-warn { margin: 0; font-size: 13px; color: var(--danger); }
 
 /* Party mode: images members drop on the page */
-.party-layer { position: absolute; inset: 0; z-index: 4; pointer-events: none; }
+/* Above everything on the page (tabs included); only messages, the poster preview and dialogs go higher. */
+.party-layer { position: absolute; inset: 0; z-index: 9; pointer-events: none; }
 .sticker { position: absolute; pointer-events: none; user-select: none; -webkit-user-select: none; }
 .sticker img { display: block; width: 100%; height: auto; border-radius: 2px; pointer-events: none; }
 .party-edit .sticker { pointer-events: auto; cursor: grab; touch-action: none; }
@@ -419,7 +420,22 @@ dialog h3 { margin: 0; font-family: var(--font-display); font-weight: 400; font-
 .sticker .st-del { top: -12px; right: -12px; min-width: 26px; height: 26px; padding: 0 8px; border-radius: 13px; place-items: center; font: inherit; font-size: 13px; font-weight: 700; border: 0; cursor: pointer; background: var(--fg); color: var(--bg); box-shadow: 0 2px 6px rgb(0 0 0 / .4); }
 .sticker .st-del.confirm { background: var(--danger); color: #fff; }
 .sticker .st-resize { right: -8px; bottom: -8px; width: 18px; height: 18px; border-radius: 4px; background: var(--accent); border: 2px solid var(--bg); cursor: nwse-resize; touch-action: none; }
-.party-on .party-btn { color: var(--accent); }
+/* Party switch: top-right corner of the marquee */
+.party-switch {
+  position: absolute; top: 18px; right: 18px; z-index: 1;
+  display: inline-flex; align-items: center; gap: 8px; padding: 4px 6px 4px 10px;
+  font: inherit; font-stretch: 75%; font-weight: 700; text-transform: uppercase; letter-spacing: .1em; font-size: 12px;
+  color: var(--muted); background: var(--bg); border: 1px solid var(--line); border-radius: 999px; cursor: pointer;
+}
+.party-switch:hover { color: var(--fg); }
+.party-switch .track { position: relative; width: 34px; height: 20px; border-radius: 999px; background: var(--sunk); border: 1px solid var(--line); transition: background .18s; }
+.party-switch .thumb { position: absolute; top: 2px; left: 2px; width: 14px; height: 14px; border-radius: 50%; background: var(--muted); transition: transform .18s, background .18s; }
+.party-switch[aria-checked="true"] { color: var(--fg); border-color: var(--accent); }
+.party-switch[aria-checked="true"] .track { background: var(--accent); border-color: var(--accent); }
+.party-switch[aria-checked="true"] .thumb { transform: translateX(14px); background: var(--on-accent); }
+@media (max-width: 640px) { .party-switch { top: 14px; right: 12px; } .marquee { padding-top: 48px; } }
+.confetti { position: fixed; inset: 0; width: 100vw; height: 100vh; z-index: 40; pointer-events: none; }
+@media (prefers-reduced-motion: reduce) { .party-switch .track, .party-switch .thumb { transition: none; } }
 .party-drop { position: fixed; inset: 0; z-index: 30; display: grid; place-items: center; background: rgb(0 0 0 / .55); color: #fff; font-family: var(--font-display); font-size: 28px; pointer-events: none; }
 
 /* Toast */
@@ -452,6 +468,9 @@ footer { color: var(--muted); font-size: 13px; text-align: center; padding-top: 
 <main class="page">
   <div class="party-layer" id="party-layer" hidden></div>
   <header class="marquee">
+    <button class="party-switch" type="button" role="switch" id="party-switch" aria-checked="false" hidden>
+      <span>Party mode</span><span class="track" aria-hidden="true"><span class="thumb"></span></span>
+    </button>
     <span class="label">Now showing at</span>
     <h1><a class="home-link" href="./" id="home-link">JBOIZ Movie Club</a></h1>
     <div class="tagline" id="tagline"></div>
@@ -834,10 +853,8 @@ setTab(location.hash.slice(1), { scroll: false });
 
 /* ---------- render ---------- */
 function renderAccount() {
-  const settingsBtn = (canParty
-      ? `<button class="link-btn party-btn" type="button" id="btn-party" aria-pressed="${party}">Party mode: ${party ? "on" : "off"}</button>` +
-        (party && me ? `<button class="btn small primary" type="button" id="btn-add-image">Add image</button>` : "")
-      : "") + `<button class="link-btn" type="button" id="btn-settings">Settings</button>`;
+  const settingsBtn = (canParty && party && me ? `<button class="btn small primary" type="button" id="btn-add-image">Add image</button>` : "") +
+    `<button class="link-btn" type="button" id="btn-settings">Settings</button>`;
   $("account").innerHTML = (me
     ? `<span>Logged in as <span class="me">${esc(me)}</span></span>
        <button class="link-btn" type="button" id="btn-passwd">Change password</button>
@@ -846,12 +863,6 @@ function renderAccount() {
       ? `<span class="muted">This login isn't linked to a club member yet.</span><button class="link-btn" type="button" id="btn-logout">Log out</button>`
       : `<button class="btn primary small" type="button" id="btn-login">Log in to rate and pick</button>`) + settingsBtn;
   $("btn-settings").addEventListener("click", openSettings);
-  $("btn-party")?.addEventListener("click", () => {
-    party = !party;
-    try { localStorage.setItem("jboiz-party", party ? "on" : "off"); } catch (e) {}
-    render();
-    toast(party ? (me ? "Party mode on. Add images with the button, paste them, or drop them on the page." : "Party mode on") : "Party mode off");
-  });
   $("btn-add-image")?.addEventListener("click", () => $("party-file").click());
   $("btn-login")?.addEventListener("click", openLogin);
   $("btn-logout")?.addEventListener("click", async () => { await sb.auth.signOut(); toast("Logged out"); });
@@ -1253,15 +1264,68 @@ function renderParty() {
   const layer = $("party-layer");
   if (!layer) return;
   const on = canParty && party;
+  const sw = $("party-switch");
+  sw.hidden = !canParty;
+  sw.setAttribute("aria-checked", on ? "true" : "false");
   document.body.classList.toggle("party-on", on);
   layer.hidden = !on;
   layer.classList.toggle("party-edit", on && !!me);
   if (!on || partyDrag) return; // don't redraw under someone's finger
+  // Positions are saved relative to the page column. On a narrower screen, nudge an image back
+  // inside the window rather than let it hang off the edge (the saved position doesn't change).
+  const box = layer.getBoundingClientRect(), W = box.width || 1;
+  const vw = document.documentElement.clientWidth, pad = 6;
+  const place = st => {
+    const w = Math.min(st.w * W, vw - pad * 2);
+    const left = Math.min(Math.max(st.x * W, pad - box.left), vw - pad - box.left - w);
+    return `left:${left}px; top:${st.y}px; width:${w}px`;
+  };
   layer.innerHTML = stickers.filter(st => st.tab === tab).map(st => `
-    <div class="sticker" data-id="${st.id}" style="left:${st.x * 100}%; top:${st.y}px; width:${st.w * 100}%; z-index:${st.z}">
+    <div class="sticker" data-id="${st.id}" style="${place(st)}; z-index:${st.z}">
       <img src="${esc(partyUrl(st.path))}" alt="" loading="lazy" draggable="false">
       ${me ? `<button class="st-del" type="button" data-del="${st.id}" aria-label="Remove image">×</button><span class="st-resize" aria-hidden="true"></span>` : ""}
     </div>`).join("");
+}
+
+$("party-switch").addEventListener("click", () => {
+  party = !party;
+  try { localStorage.setItem("jboiz-party", party ? "on" : "off"); } catch (e) {}
+  render();
+  if (party) {
+    confetti($("party-switch"));
+    if (me) toast("Party mode on. Add images with the button, paste them, or drop them on the page.");
+  }
+});
+let partyResize;
+addEventListener("resize", () => { clearTimeout(partyResize); partyResize = setTimeout(renderParty, 150); });
+
+// A short confetti pop from an element. Skipped for people who turn off motion.
+function confetti(from) {
+  if (matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+  const c = document.createElement("canvas");
+  c.className = "confetti";
+  const dpr = Math.min(2, devicePixelRatio || 1);
+  c.width = innerWidth * dpr; c.height = innerHeight * dpr;
+  document.body.append(c);
+  const ctx = c.getContext("2d"); ctx.scale(dpr, dpr);
+  const b = from.getBoundingClientRect(), ox = b.left + b.width / 2, oy = b.top + b.height / 2;
+  const colors = ["#f2b544", "#e74c3c", "#f39c12", "#f4d03f", "#8fd694", "#34a853", "#8cc8ff", "#ffffff"];
+  const bits = Array.from({ length: 140 }, () => {
+    const a = Math.random() * Math.PI * 2, v = 4 + Math.random() * 9;
+    return { x: ox, y: oy, vx: Math.cos(a) * v, vy: Math.sin(a) * v - 5, w: 5 + Math.random() * 6, h: 3 + Math.random() * 5,
+      r: Math.random() * Math.PI, vr: (Math.random() - .5) * .4, color: colors[Math.floor(Math.random() * colors.length)] };
+  });
+  const start = performance.now(), life = 1700;
+  (function frame(now) {
+    const t = now - start;
+    ctx.clearRect(0, 0, innerWidth, innerHeight);
+    ctx.globalAlpha = Math.max(0, 1 - Math.max(0, t - life * .6) / (life * .4));
+    for (const p of bits) {
+      p.vy += .32; p.vx *= .985; p.vy *= .985; p.x += p.vx; p.y += p.vy; p.r += p.vr;
+      ctx.save(); ctx.translate(p.x, p.y); ctx.rotate(p.r); ctx.fillStyle = p.color; ctx.fillRect(-p.w / 2, -p.h / 2, p.w, p.h); ctx.restore();
+    }
+    if (t < life) requestAnimationFrame(frame); else c.remove();
+  })(start);
 }
 
 // Move and resize with pointer events (mouse, touch, pen). Saved once when you let go.
