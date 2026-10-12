@@ -220,6 +220,10 @@ section { display: grid; gap: 16px; min-width: 0; }
 .schedule { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 10px; }
 .slot { display: grid; grid-template-columns: 52px minmax(0, 1fr) 60px; gap: 12px; align-items: center; padding: 6px 6px 6px 14px; min-height: 102px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); }
 .slot.mine { border-color: var(--accent); }
+.slot.is-next { background: var(--sunk); }
+.slot .next-tag { display: inline-block; margin-bottom: 2px; padding: 1px 7px; border-radius: 999px; font-size: 11px; font-weight: 700; font-stretch: 75%; letter-spacing: .1em; text-transform: uppercase; background: var(--accent); color: var(--on-accent); }
+.soon { display: grid; gap: 12px; }
+.soon .schedule { grid-template-columns: repeat(auto-fill, minmax(min(100%, 260px), 1fr)); }
 .slot .date { text-align: center; line-height: 1.1; }
 .slot .date .m { font-size: 11px; letter-spacing: .12em; text-transform: uppercase; color: var(--muted); font-weight: 700; font-stretch: 75%; }
 .slot .date .d { font-family: var(--font-display); font-size: 24px; color: var(--display); }
@@ -519,6 +523,13 @@ footer { color: var(--muted); font-size: 13px; text-align: center; padding-top: 
       <section aria-labelledby="next-h">
         <div class="section-head"><h2 id="next-h">Next screening</h2></div>
         <article class="ticket" id="ticket"></article>
+        <div class="soon" id="soon">
+          <div class="section-head">
+            <span class="label">Coming up</span>
+            <button class="link-btn" type="button" data-act="goto-tab" data-id="schedule">See the full schedule</button>
+          </div>
+          <ul class="schedule" id="soon-list"></ul>
+        </div>
       </section>
       <section aria-labelledby="takes-h" id="takes-section">
         <div class="section-head">
@@ -1075,23 +1086,34 @@ function voteControl(t) {
 const SHOWN = 12;
 const RATE_WITHIN_DAYS = 7;
 function renderSchedule({ upcoming }) {
-  const later = upcoming.slice(1);
   // "My picks": every upcoming date that's yours (the next screening included), all at once.
   const mineOnly = schedFilter === "mine" && !!me;
   const mine = upcoming.filter(f => isPicker(f, me));
   $("sched-controls").hidden = !me;
   $("sched-filter").querySelectorAll("[data-filter]").forEach(b => b.setAttribute("aria-pressed", b.dataset.filter === (mineOnly ? "mine" : "all") ? "true" : "false"));
   $("sched-count").textContent = mineOnly ? `${plural(mine.length, "pick")} coming up · ${mine.filter(f => !f.title).length} still to choose` : "";
-  const list = mineOnly ? mine : showAll ? later : later.slice(0, SHOWN);
+  const list = mineOnly ? mine : showAll ? upcoming : upcoming.slice(0, SHOWN);
   if (mineOnly && !list.length) {
     $("schedule").innerHTML = `<li class="muted">You don't have any upcoming picks on the calendar.</li>`;
     $("sched-toggle").hidden = true;
     return;
   }
-  $("schedule").innerHTML = list.map(f => `
-    <li class="slot ${isPicker(f, me) ? "mine" : ""}">
+  $("schedule").innerHTML = list.map(f => slotCard(f, f === upcoming[0])).join("");
+  const tog = $("sched-toggle");
+  tog.hidden = mineOnly || upcoming.length <= SHOWN;
+  if (upcoming.length) tog.textContent = showAll ? "Show fewer dates" : `Show all ${upcoming.length} dates through ${fmt(upcoming[upcoming.length - 1].date, { month: "short", year: "numeric" })}`;
+  // Next up tab: the three screenings after the next one.
+  const soon = upcoming.slice(1, 4);
+  $("soon").hidden = !soon.length;
+  $("soon-list").innerHTML = soon.map(f => slotCard(f, false)).join("");
+}
+
+function slotCard(f, isNext) {
+  return `
+    <li class="slot ${isPicker(f, me) ? "mine" : ""} ${isNext ? "is-next" : ""}">
       <div class="date"><div class="m">${fmt(f.date, { month: "short" })}</div><div class="d">${fmt(f.date, { day: "numeric" })}</div></div>
       <div>
+        ${isNext ? `<span class="next-tag">Next up</span>` : ""}
         ${f.title
           ? `<div class="film">${f.imdb ? `<a href="${imdbUrl(esc(f.imdb))}" target="_blank" rel="noopener">${esc(f.title)}</a>` : esc(f.title)}</div>`
           : `<div class="film tba">Pick not in yet</div>`}
@@ -1099,10 +1121,7 @@ function renderSchedule({ upcoming }) {
         ${me ? `<button class="link-btn edit" type="button" data-act="edit" data-id="${f.date}">${f.title ? "Edit" : "Add film"}</button>` : ""}
       </div>
       <div>${posterImg(f)}</div>
-    </li>`).join("");
-  const tog = $("sched-toggle");
-  tog.hidden = mineOnly || later.length <= SHOWN;
-  if (later.length) tog.textContent = showAll ? "Show fewer dates" : `Show all ${later.length} dates through ${fmt(later[later.length - 1].date, { month: "short", year: "numeric" })}`;
+    </li>`;
 }
 
 function renderOrder({ next }) {
