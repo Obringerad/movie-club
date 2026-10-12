@@ -994,9 +994,17 @@ function renderDetail(f, C) {
   return `${links ? `<p class="links">${links}</p>` : ""}${list}${missedLine}${form}${attend}`;
 }
 
-const shade = v => `background: color-mix(in oklab, var(--accent) ${12 + (v - 1) * 20}%, var(--surface)); color: ${v >= 4 ? "var(--on-accent)" : "var(--fg)"}`;
+// Rating colors (SeriesGraph style): [background, text, label]. Same in every palette.
+const RATING = {
+  5: ["#186a3b", "#ffffff", "Awesome"],
+  4: ["#28b463", "#0d1f14", "Great"],
+  3: ["#f4d03f", "#2a2205", "Good"],
+  2: ["#f39c12", "#2a1802", "Average"],
+  1: ["#e74c3c", "#1a0a08", "Bad"]
+};
+const shade = v => `background: ${RATING[v][0]}; color: ${RATING[v][1]}`;
 function renderGrid({ C, watched }) {
-  $("legend").innerHTML = [1, 2, 3, 4, 5].map(v => `<span class="chip"><i style="${shade(v)}"></i>${v}</span>`).join("") + `<span class="chip">· = didn't rate</span>` + (canMiss ? `<span class="chip">MISSED = missed the screening</span>` : "");
+  $("legend").innerHTML = [5, 4, 3, 2, 1].map(v => `<span class="chip"><i style="${shade(v)}"></i>${v} ${RATING[v][2]}</span>`).join("") + `<span class="chip">· = didn't rate</span>` + (canMiss ? `<span class="chip">MISSED = missed the screening</span>` : "");
   const rows = [...watched].sort((a, b) => b.date.localeCompare(a.date));
   // data-col ties each cell to its column so the crosshair can highlight it; "me" marks your own column.
   const mc = i => (C[i] === me ? " me" : "");
@@ -1099,7 +1107,7 @@ function renderMembers({ C, watched }) {
     const top = Math.max(...c.spread, 1);
     const spread = `
       <div class="spread" role="img" aria-label="Ratings given: ${c.spread.map((n, i) => `${n} at ${i + 1} star${i ? "s" : ""}`).join(", ")}">
-        ${c.spread.map((n, i) => `<div class="col"><span class="n">${n}</span><div class="track"><div class="fill" style="height:${(n / top) * 100}%"></div></div><span class="k">${i + 1}★</span></div>`).join("")}
+        ${c.spread.map((n, i) => `<div class="col"><span class="n">${n}</span><div class="track"><div class="fill" style="height:${(n / top) * 100}%; background:${RATING[i + 1][0]}"></div></div><span class="k">${i + 1}★</span></div>`).join("")}
       </div>`;
     const rows = [
       [`vs. the room`, `${fmtD(c.delta)} <small>${c.delta >= 0.05 ? "kinder than average" : c.delta <= -0.05 ? "harsher than average" : "right in step"}</small>`],
