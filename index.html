@@ -129,9 +129,9 @@ section { display: grid; gap: 16px; min-width: 0; }
 /* Top-left corner of the marquee: who's logged in. Lines up with the party switch on the right. */
 .account { position: absolute; top: 22px; left: 18px; z-index: 11; display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; min-height: 30px; font-size: 13px; text-align: left; max-width: calc(50% - 24px); }
 .account .btn { padding: 4px 12px; border-radius: 999px; font-size: 12px; }
-.gear-btn { display: inline-grid; place-items: center; width: 30px; height: 30px; padding: 0; border-radius: 50%; border: 1px solid var(--line); background: var(--bg); color: var(--muted); cursor: pointer; }
+.gear-btn { display: inline-grid; place-items: center; flex: none; width: 34px; height: 34px; padding: 0; border-radius: 50%; border: 1px solid var(--line); background: var(--bg); color: var(--muted); cursor: pointer; }
 .gear-btn:hover { color: var(--fg); border-color: var(--accent); }
-.gear-btn svg { width: 17px; height: 17px; }
+.gear-btn svg { display: block; width: 22px; height: 22px; }
 .account .me { font-weight: 700; }
 
 /* Your turn */
@@ -468,7 +468,7 @@ dialog h3 { margin: 0; font-family: var(--font-display); font-weight: 400; font-
 .sticker .st-resize { right: -8px; bottom: -8px; width: 18px; height: 18px; border-radius: 4px; background: var(--accent); border: 2px solid var(--bg); cursor: nwse-resize; touch-action: none; }
 /* Party corner: switch (and Add image when it's on) in the marquee's top-right corner */
 /* Above the party images (z-index 9) so the switch can always be reached. */
-.party-corner { position: absolute; top: 22px; right: 18px; z-index: 11; display: flex; flex-wrap: wrap; justify-content: flex-end; align-items: center; gap: 8px; max-width: calc(100% - 36px); }
+.party-corner { position: absolute; top: 20px; right: 18px; z-index: 11; display: flex; flex-wrap: wrap; justify-content: flex-end; align-items: center; gap: 8px; max-width: calc(100% - 36px); }
 .party-add { font-size: 12px; padding: 4px 12px; border-radius: 999px; }
 .party-switch {
   display: inline-flex; align-items: center; gap: 8px; padding: 4px 6px 4px 10px;
