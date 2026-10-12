@@ -215,6 +215,13 @@ section { display: grid; gap: 16px; min-width: 0; }
 .votes .net { min-width: 22px; text-align: center; font-family: var(--font-data); font-size: 13px; font-weight: 500; }
 .votes .net.pos { color: var(--good); }
 .votes .net.neg { color: var(--danger); }
+.votes { position: relative; }
+.votes .net-btn { font: inherit; width: auto; min-width: 26px; height: 26px; padding: 0 6px; border: 0; border-radius: 999px; background: none; cursor: pointer; text-decoration: underline dotted; text-underline-offset: 3px; }
+.votes .net-btn:hover { background: var(--sunk); }
+.voters-pop { position: absolute; right: 0; top: calc(100% + 6px); z-index: 6; width: max-content; max-width: 240px; padding: 10px 12px; border-radius: 8px; border: 1px solid var(--line); background: var(--surface); box-shadow: 0 8px 24px rgb(0 0 0 / .35); font-size: 13px; text-align: left; display: grid; gap: 4px; }
+.voters-pop b { font-weight: 700; }
+.voters-pop .up-l b { color: var(--good); }
+.voters-pop .down-l b { color: var(--danger); }
 
 /* Schedule */
 .schedule { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 10px; }
@@ -1108,15 +1115,43 @@ function renderTakes({ watched }) {
 }
 
 // ▲ score ▼ for a review. You can't vote on your own; logged-out viewers see the score only.
+let openVoters = null; // "slot|author" whose voter list is showing
 function voteControl(t) {
   const own = t.name === me, off = !me || own;
   const tip = !me ? "Log in to vote" : own ? "You can't vote on your own take" : "";
-  return `<span class="votes" role="group" aria-label="Votes for ${esc(t.name)}'s take"${tip ? ` title="${tip}"` : ""}>
+  const key = `${t.f.date}|${t.name}`;
+  const cls = `net num ${t.net > 0 ? "pos" : t.net < 0 ? "neg" : ""}`;
+  const score = `${t.net > 0 ? "+" : ""}${t.net}`;
+  // On your own take with votes, the score opens a list of who voted.
+  const canSee = own && (t.up + t.down) > 0;
+  let net = `<span class="${cls}" title="${t.up} up · ${t.down} down">${score}</span>`, pop = "";
+  if (canSee) {
+    const open = openVoters === key;
+    net = `<button type="button" class="${cls} net-btn" data-voters="${esc(key)}" aria-expanded="${open}" title="See who voted">${score}</button>`;
+    if (open) {
+      const by = (votes.get(key) || { by: {} }).by;
+      const ups = Object.keys(by).filter(n => by[n] > 0).sort(), downs = Object.keys(by).filter(n => by[n] < 0).sort();
+      pop = `<span class="voters-pop" role="status">
+        ${ups.length ? `<span class="up-l"><b>▲</b> ${ups.map(esc).join(", ")}</span>` : ""}
+        ${downs.length ? `<span class="down-l"><b>▼</b> ${downs.map(esc).join(", ")}</span>` : ""}
+      </span>`;
+    }
+  }
+  return `<span class="votes" role="group" aria-label="Votes for ${esc(t.name)}'s take"${tip && !canSee ? ` title="${tip}"` : ""}>
     <button type="button" class="up" data-vote="1" data-slot="${t.f.date}" data-author="${esc(t.name)}" aria-label="Upvote" aria-pressed="${t.myVote === 1}"${off ? " disabled" : ""}>▲</button>
-    <span class="net num ${t.net > 0 ? "pos" : t.net < 0 ? "neg" : ""}" title="${t.up} up · ${t.down} down">${t.net > 0 ? "+" : ""}${t.net}</span>
+    ${net}
     <button type="button" class="down" data-vote="-1" data-slot="${t.f.date}" data-author="${esc(t.name)}" aria-label="Downvote" aria-pressed="${t.myVote === -1}"${off ? " disabled" : ""}>▼</button>
+    ${pop}
   </span>`;
 }
+// Open or close the voter list; any other click closes it.
+document.addEventListener("click", e => {
+  const b = e.target.closest("[data-voters]");
+  const next = b ? (openVoters === b.dataset.voters ? null : b.dataset.voters) : null;
+  if (next === openVoters || (!b && e.target.closest(".voters-pop"))) return;
+  openVoters = next;
+  render();
+});
 
 const SHOWN = 12;
 const RATE_WITHIN_DAYS = 7;
