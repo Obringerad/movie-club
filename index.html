@@ -523,6 +523,7 @@ dialog h3 { margin: 0; font-family: var(--font-display); font-weight: 400; font-
 .toast { position: fixed; left: 50%; bottom: calc(20px + env(safe-area-inset-bottom, 0px)); transform: translateX(-50%); background: var(--fg); color: var(--bg); padding: 10px 16px; border-radius: 8px; font-weight: 600; font-size: 14px; max-width: calc(100vw - 32px); z-index: 10; box-shadow: 0 6px 24px rgb(0 0 0 / .25); }
 
 footer { color: var(--muted); font-size: 13px; text-align: center; padding-top: 24px; }
+footer .version { display: block; margin-top: 6px; font-family: var(--font-data); font-size: 11px; opacity: .7; }
 
 @media (max-width: 640px) {
   .ticket, .ticket.has-poster { grid-template-columns: minmax(0, 1fr); }
@@ -681,7 +682,7 @@ footer { color: var(--muted); font-size: 13px; text-align: center; padding-top: 
     </div>
   </div>
 
-  <footer>Anyone with the link can look. Log in to rate, review and pick. Film data and posters from TMDB. This product uses the TMDB API but is not endorsed or certified by TMDB.</footer>
+  <footer>Anyone with the link can look. Log in to rate, review and pick. Film data and posters from TMDB. This product uses the TMDB API but is not endorsed or certified by TMDB.<span class="version" id="version">v64 · Oct 12, 2026 7:42 AM</span></footer>
 </main>
 
 <dialog id="login" class="narrow" aria-labelledby="login-h">
