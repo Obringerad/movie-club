@@ -1483,7 +1483,7 @@ function renderMembers({ C, watched }) {
       <div class="spread" role="group" aria-label="Ratings given">
         ${c.spread.map((n, i) => {
           const films = c.films[i];
-          const pop = n ? `<div class="spread-pop"><div class="inner"><div class="h">${i + 1}★ · ${plural(n, "film")}</div><ul>${films.map(f => `<li><span>${esc(f.title)}</span><span class="club">club <b style="color:${RATING[Math.min(5, Math.max(1, Math.round(f.avg)))][0]}">${f.avg.toFixed(1)}</b></span><span class="dt">${fmt(f.date, { month: "short", day: "numeric" })}</span></li>`).join("")}</ul></div></div>` : "";
+          const pop = n ? `<div class="spread-pop"><div class="inner"><div class="h">${i + 1}★ · ${plural(n, "film")}</div><ul>${films.map(f => `<li><span>${esc(f.title)}</span><span class="club"><b style="color:${RATING[Math.min(5, Math.max(1, Math.round(f.avg)))][0]}">${f.avg.toFixed(1)}</b></span><span class="dt">${fmt(f.date, { month: "short", day: "numeric" })}</span></li>`).join("")}</ul></div></div>` : "";
           return `<div class="col ${n ? "has" : ""}"${n ? ` tabindex="0"` : ""} aria-label="${n} at ${i + 1} star${i ? "s" : ""}${n ? `: ${esc(films.map(f => f.title).join(", "))}` : ""}"><span class="n">${n}</span><div class="track"><div class="fill" style="height:${(n / top) * 100}%; background:${RATING[i + 1][0]}"></div></div><span class="k">${i + 1}★</span>${pop}</div>`;
         }).join("")}
       </div>`;
