@@ -267,17 +267,42 @@ tr.detail > td { background: var(--sunk); padding: 10px 12px 16px 10px; white-sp
 .legend .chip { display: inline-flex; align-items: center; gap: 6px; }
 .legend i { width: 18px; height: 14px; border-radius: 3px; display: inline-block; }
 
-/* Members */
-.members { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 12px; }
-.member { display: grid; gap: 10px; padding: 16px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); align-content: start; }
-.member header { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
-.member .name { font-family: var(--font-display); font-size: 22px; color: var(--fg); }
-.member .avg { font-family: var(--font-data); font-size: 22px; font-weight: 500; }
-.member dl { margin: 0; display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 4px 12px; font-size: 14px; }
+/* Critics */
+.members { display: grid; grid-template-columns: repeat(auto-fill, minmax(420px, 1fr)); gap: 16px; }
+.member { display: grid; gap: 18px; padding: 22px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); align-content: start; min-width: 0; }
+.member.me { border-color: var(--accent); }
+.member-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; }
+.member-head .name { font-family: var(--font-display); font-size: 30px; line-height: 1; color: var(--fg); }
+.member-head .sub { margin-top: 6px; font-size: 14px; color: var(--muted); }
+.member-head .score-big { text-align: right; display: grid; justify-items: end; gap: 4px; }
+.member-head .avg { font-family: var(--font-data); font-size: 34px; font-weight: 500; line-height: 1; }
+.member-head .stars { font-size: 16px; }
+.spread { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 8px; align-items: end; }
+.spread .col { display: grid; gap: 4px; justify-items: center; }
+.spread .track { width: 100%; height: 56px; display: flex; align-items: flex-end; background: var(--sunk); border-radius: 4px; overflow: hidden; }
+.spread .fill { width: 100%; background: var(--accent); border-radius: 4px 4px 0 0; min-height: 0; }
+.spread .n { font-family: var(--font-data); font-size: 13px; }
+.spread .k { font-size: 12px; color: var(--muted); }
+.extremes { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.extreme { display: grid; grid-template-columns: 56px minmax(0, 1fr); gap: 10px; align-items: center; padding: 8px; border-radius: 8px; background: var(--sunk); min-width: 0; }
+.extreme.no-poster { grid-template-columns: minmax(0, 1fr); }
+.extreme .poster { width: 56px; }
+.extreme .label { font-size: 11px; }
+.extreme .t { font-weight: 600; overflow-wrap: anywhere; line-height: 1.25; }
+.extreme .v { font-size: 13px; color: var(--muted); }
+.member dl { margin: 0; display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 8px 16px; font-size: 14px; }
 .member dt { color: var(--muted); }
 .member dd { margin: 0; text-align: right; overflow-wrap: anywhere; }
+.member dd small { color: var(--muted); }
+.member blockquote { margin: 0; padding: 12px 14px; border-radius: 8px; background: var(--sunk); font-size: 15px; overflow-wrap: anywhere; }
+.member blockquote cite { display: block; margin-top: 4px; font-style: normal; font-size: 13px; color: var(--muted); }
 .bar { height: 6px; border-radius: 3px; background: var(--sunk); overflow: hidden; }
 .bar span { display: block; height: 100%; background: var(--accent); }
+@media (max-width: 520px) {
+  .members { grid-template-columns: minmax(0, 1fr); }
+  .member { padding: 18px; }
+  .extremes { grid-template-columns: minmax(0, 1fr); }
+}
 
 /* Side boxes */
 .box { padding: 18px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); display: grid; gap: 12px; }
@@ -424,7 +449,7 @@ footer { color: var(--muted); font-size: 13px; text-align: center; padding-top: 
       <section aria-labelledby="mem-h">
         <div class="section-head">
           <h2 id="mem-h">The critics</h2>
-          <p>Averages count only the films each person rated.</p>
+          <p>Averages count only the films each person rated. Taste twins compare films both people rated (3 or more).</p>
         </div>
         <div class="members" id="members"></div>
       </section>
@@ -918,33 +943,93 @@ function renderGrid({ C, watched }) {
 }
 
 function renderMembers({ C, watched }) {
-  const listTitles = arr => arr.length > 2 ? `${esc(arr[0])} +${arr.length - 1} more` : arr.map(esc).join(", ");
+  const fmtD = d => (d >= 0 ? "+" : "−") + Math.abs(d).toFixed(1);
+  // Everyone's ratings by name, for comparing tastes.
+  const byName = Object.fromEntries(C.map((name, ci) => [name, new Map(watched.filter(f => f.vals[ci] > 0).map(f => [f.date, f.vals[ci]]))]));
+
   const cards = C.map((name, ci) => {
     const missed = watched.filter(f => f.missed.has(name)).length;
-    const rated = watched.filter(f => f.vals[ci] > 0).map(f => ({ f, v: f.vals[ci] }));
-    if (!rated.length) return { name, avg: null, missed };
-    const top = Math.max(...rated.map(r => r.v)), low = Math.min(...rated.map(r => r.v));
-    return {
-      name, count: rated.length, avg: mean(rated.map(r => r.v)), top, low, missed,
-      favs: rated.filter(r => r.v === top).map(r => r.f.title),
-      lows: rated.filter(r => r.v === low).map(r => r.f.title),
-      delta: mean(rated.map(r => r.v - r.f.avg))
-    };
+    const rated = watched.filter(f => f.vals[ci] > 0).map(f => ({ f, v: f.vals[ci], d: f.vals[ci] - f.avg }));
+    const card = { name, missed, count: rated.length, avg: rated.length ? mean(rated.map(r => r.v)) : null };
+    if (!rated.length) return card;
+
+    card.spread = [1, 2, 3, 4, 5].map(n => rated.filter(r => r.v === n).length);
+    card.delta = mean(rated.map(r => r.d));
+    // Favorite: highest rating, tie-broken by how much more they liked it than the club. Least favorite: the reverse.
+    card.fav = [...rated].sort((a, b) => b.v - a.v || b.d - a.d)[0];
+    card.least = [...rated].sort((a, b) => a.v - b.v || a.d - b.d)[0];
+    if (card.least.f === card.fav.f) card.least = null;
+    // Hot take: furthest from the club on a film at least 3 people rated.
+    const contested = rated.filter(r => r.f.vals.filter(Boolean).length >= 3);
+    card.hot = contested.length ? contested.reduce((a, b) => (Math.abs(b.d) > Math.abs(a.d) ? b : a)) : null;
+    if (card.hot && Math.abs(card.hot.d) < 1) card.hot = null;
+
+    // Their picks and how the club rated them.
+    const picks = watched.filter(f => isPicker(f, name) && f.avg != null);
+    card.picks = { n: watched.filter(f => isPicker(f, name)).length, avg: picks.length ? mean(picks.map(f => f.avg)) : null };
+
+    // Taste twin and opposite: average gap on films both rated (at least 3 in common).
+    const mine = byName[name];
+    const gaps = C.filter(o => o !== name).map(o => {
+      const shared = [...mine.keys()].filter(d => byName[o].has(d));
+      return shared.length >= 3 ? { o, gap: mean(shared.map(d => Math.abs(mine.get(d) - byName[o].get(d)))), n: shared.length } : null;
+    }).filter(Boolean).sort((a, b) => a.gap - b.gap);
+    card.twin = gaps[0] || null;
+    card.opposite = gaps.length > 1 ? gaps[gaps.length - 1] : null;
+
+    // Favorite genre: best average across genres they've rated at least twice.
+    const g = {};
+    rated.forEach(r => (r.f.genre || "").split(/\s*,\s*/).filter(Boolean).forEach(x => (g[x] = g[x] || []).push(r.v)));
+    const genres = Object.entries(g).filter(([, v]) => v.length >= 2).map(([k, v]) => ({ k, avg: mean(v), n: v.length }))
+      .sort((a, b) => b.avg - a.avg || b.n - a.n);
+    card.genre = genres[0] || null;
+
+    // Latest review.
+    const reviews = rated.filter(r => r.f.reviews[name]).map(r => ({ f: r.f, ...r.f.reviews[name] }))
+      .sort((a, b) => (b.at || "").localeCompare(a.at || ""));
+    card.reviews = reviews.length;
+    card.latest = reviews[0] || null;
+    return card;
   }).sort((a, b) => (b.avg ?? -1) - (a.avg ?? -1));
-  $("members").innerHTML = cards.map(c => c.avg == null ? `
-    <article class="member"><header><span class="name">${esc(c.name)}</span><span class="avg muted">–</span></header>
-      <p class="muted" style="margin:0">No ratings yet.${canMiss && c.missed ? ` Missed ${plural(c.missed, "screening")}.` : ""}</p></article>` : `
-    <article class="member">
-      <header><span class="name">${esc(c.name)}</span><span class="avg">${c.avg.toFixed(2)}</span></header>
-      <div class="bar" aria-hidden="true"><span style="width:${(c.avg / 5) * 100}%"></span></div>
-      <dl>
-        <dt>Films rated</dt><dd class="num">${c.count} of ${watched.length}</dd>
-        ${canMiss ? `<dt>Screenings missed</dt><dd class="num">${c.missed}</dd>` : ""}
-        <dt>vs. the room</dt><dd class="num">${c.delta >= 0 ? "+" : "−"}${Math.abs(c.delta).toFixed(2)} ${c.delta >= 0.05 ? "kinder" : c.delta <= -0.05 ? "harsher" : "in step"}</dd>
-        <dt>Top (${c.top}★)</dt><dd>${listTitles(c.favs)}</dd>
-        <dt>Low (${c.low}★)</dt><dd>${listTitles(c.lows)}</dd>
-      </dl>
-    </article>`).join("");
+
+  const extreme = (label, r) => r ? `
+    <div class="extreme ${hasPoster(r.f) ? "" : "no-poster"}">
+      ${posterImg(r.f)}
+      <div><div class="label">${label}</div><div class="t">${esc(r.f.title)}</div><div class="v">${r.v}★ · club ${r.f.avg.toFixed(1)}</div></div>
+    </div>` : "";
+
+  $("members").innerHTML = cards.map(c => {
+    const head = `
+      <div class="member-head">
+        <div>
+          <div class="name">${esc(c.name)}</div>
+          <div class="sub">${c.count ? `Rated ${c.count} of ${watched.length}` : "No ratings yet"}${canMiss ? ` · Missed ${c.missed}` : ""}${c.reviews ? ` · ${plural(c.reviews, "review")}` : ""}</div>
+        </div>
+        ${c.avg != null ? `<div class="score-big"><span class="avg">${c.avg.toFixed(2)}</span>${stars(c.avg)}</div>` : ""}
+      </div>`;
+    if (c.avg == null) return `<article class="member ${c.name === me ? "me" : ""}">${head}</article>`;
+    const top = Math.max(...c.spread, 1);
+    const spread = `
+      <div class="spread" role="img" aria-label="Ratings given: ${c.spread.map((n, i) => `${n} at ${i + 1} star${i ? "s" : ""}`).join(", ")}">
+        ${c.spread.map((n, i) => `<div class="col"><span class="n">${n}</span><div class="track"><div class="fill" style="height:${(n / top) * 100}%"></div></div><span class="k">${i + 1}★</span></div>`).join("")}
+      </div>`;
+    const rows = [
+      [`vs. the room`, `${fmtD(c.delta)} <small>${c.delta >= 0.05 ? "kinder than average" : c.delta <= -0.05 ? "harsher than average" : "right in step"}</small>`],
+      c.picks.n ? [`Their picks`, `${c.picks.n} film${c.picks.n === 1 ? "" : "s"}${c.picks.avg != null ? ` <small>· club gave them ${c.picks.avg.toFixed(1)}</small>` : ""}`] : null,
+      c.twin ? [`Taste twin`, `${esc(c.twin.o)} <small>· ${c.twin.gap.toFixed(1)}★ apart over ${c.twin.n}</small>`] : null,
+      c.opposite ? [`Opposite`, `${esc(c.opposite.o)} <small>· ${c.opposite.gap.toFixed(1)}★ apart over ${c.opposite.n}</small>`] : null,
+      c.genre ? [`Favorite genre`, `${esc(c.genre.k)} <small>· ${c.genre.avg.toFixed(1)} over ${c.genre.n}</small>`] : null,
+      c.hot ? [`Hot take`, `${esc(c.hot.f.title)} <small>· gave ${c.hot.v}★, club ${c.hot.f.avg.toFixed(1)}</small>`] : null
+    ].filter(Boolean);
+    return `
+      <article class="member ${c.name === me ? "me" : ""}">
+        ${head}
+        ${spread}
+        <div class="extremes">${extreme("Favorite", c.fav)}${extreme("Least favorite", c.least)}</div>
+        <dl>${rows.map(([k, v]) => `<dt>${k}</dt><dd>${v}</dd>`).join("")}</dl>
+        ${c.latest ? `<blockquote>“${esc(c.latest.text)}”<cite>on ${esc(c.latest.f.title)}</cite></blockquote>` : ""}
+      </article>`;
+  }).join("");
 }
 
 /* ---------- settings: personal palette ---------- */
