@@ -283,7 +283,8 @@ th button[aria-sort] { color: var(--fg); }
   .film-hit .t { font-size: 16px; }
 }
 .detail-takes { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
-.detail-takes li { display: grid; grid-template-columns: 80px auto minmax(0, 1fr); gap: 10px; align-items: baseline; }
+.detail-takes li { display: grid; grid-template-columns: 80px auto minmax(0, 1fr) auto; gap: 10px; align-items: baseline; }
+.detail-takes .votes { align-self: center; }
 .detail-takes .name { font-weight: 700; }
 .detail-takes .text { overflow-wrap: anywhere; }
 .missed-line { margin: 10px 0 0; font-size: 14px; color: var(--muted); }
@@ -471,6 +472,7 @@ footer { color: var(--muted); font-size: 13px; text-align: center; padding-top: 
   .row2 { grid-template-columns: 1fr; }
   .detail-takes li { grid-template-columns: 1fr auto; }
   .detail-takes .text { grid-column: 1 / -1; }
+  .detail-takes .votes { grid-column: 1 / -1; justify-self: start; }
   .turn .sep { display: none; }
 }
 @media (prefers-reduced-motion: reduce) { .flash { animation: none; } .poster-pop { transition: none; } }
@@ -1154,7 +1156,14 @@ function renderDetail(f, C) {
   const entries = C.filter(c => f.ratings[c]).map(c => ({ name: c, score: f.ratings[c], text: f.reviews[c]?.text || "" }))
     .sort((a, b) => b.score - a.score || a.name.localeCompare(b.name));
   const list = entries.length
-    ? `<ul class="detail-takes">${entries.map(e => `<li><span class="name">${esc(e.name)}</span>${stars(e.score)}<span class="text ${e.text ? "" : "muted"}">${e.text ? esc(e.text) : canReview ? "No review" : ""}</span></li>`).join("")}</ul>`
+    ? `<ul class="detail-takes">${entries.map(e => {
+        let vote = "";
+        if (canVote && e.text) {
+          const v = votes.get(`${f.date}|${e.name}`) || { up: 0, down: 0, by: {} };
+          vote = voteControl({ f, name: e.name, up: v.up, down: v.down, net: v.up - v.down, myVote: me ? v.by[me] || 0 : 0 });
+        }
+        return `<li><span class="name">${esc(e.name)}</span>${stars(e.score)}<span class="text ${e.text ? "" : "muted"}">${e.text ? esc(e.text) : canReview ? "No review" : ""}</span>${vote}</li>`;
+      }).join("")}</ul>`
     : `<p class="muted" style="margin:0">Nobody has rated this yet.</p>`;
   const missedNames = C.filter(c => f.missed.has(c));
   const missedLine = missedNames.length ? `<p class="missed-line">Missed it: <b>${missedNames.map(esc).join(", ")}</b></p>` : "";
@@ -1675,7 +1684,7 @@ $("takes-sort").addEventListener("click", e => {
   render();
 });
 // Vote: tap an arrow to vote, tap it again to take the vote back.
-$("takes").addEventListener("click", e => {
+document.addEventListener("click", e => {
   const b = e.target.closest("[data-vote]"); if (!b || b.disabled) return;
   if (!me) return openLogin();
   const slot = b.dataset.slot, author = b.dataset.author, value = +b.dataset.vote;
