@@ -110,6 +110,8 @@ section { display: grid; gap: 16px; min-width: 0; }
 .marquee::before { top: 8px; }
 .marquee::after { bottom: 8px; }
 .marquee h1 { font-size: clamp(34px, 8vw, 76px); letter-spacing: .02em; }
+.home-link { color: inherit; text-decoration: none; border-radius: 6px; }
+.home-link:hover { filter: brightness(1.12); }
 .marquee .tagline { display: flex; flex-wrap: wrap; justify-content: center; gap: 4px 18px; color: var(--muted); }
 .marquee .tagline b { color: var(--fg); font-weight: 600; }
 .account { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 8px 14px; margin-top: 4px; font-size: 14px; }
@@ -371,7 +373,7 @@ footer { color: var(--muted); font-size: 13px; text-align: center; padding-top: 
 <main class="page">
   <header class="marquee">
     <span class="label">Now showing at</span>
-    <h1>JBOIZ Movie Club</h1>
+    <h1><a class="home-link" href="./" id="home-link">JBOIZ Movie Club</a></h1>
     <div class="tagline" id="tagline"></div>
     <div class="account" id="account"></div>
   </header>
@@ -681,6 +683,11 @@ function setTab(t, { scroll = true } = {}) {
     if (nav.getBoundingClientRect().top < 0) window.scrollTo({ top: nav.offsetTop, behavior: "instant" });
   }
 }
+$("home-link").addEventListener("click", e => {
+  e.preventDefault();
+  setTab("next", { scroll: false });
+  window.scrollTo({ top: 0, behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" });
+});
 $("tabs").addEventListener("click", e => { const b = e.target.closest("[data-tab]"); if (b) setTab(b.dataset.tab); });
 $("tabs").addEventListener("keydown", e => {
   if (e.key !== "ArrowRight" && e.key !== "ArrowLeft") return;
