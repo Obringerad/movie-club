@@ -436,6 +436,20 @@ dialog h3 { margin: 0; font-family: var(--font-display); font-weight: 400; font-
 .search-results .thumb { width: 34px; aspect-ratio: 2 / 3; object-fit: cover; border-radius: 3px; background: var(--sunk); display: block; }
 .search-results b { display: block; font-weight: 600; overflow-wrap: anywhere; }
 .search-results small { color: var(--muted); font-size: 12px; }
+.search-results button[aria-pressed="true"] { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
+.search-results button:disabled { opacity: .55; cursor: default; border-color: var(--line); }
+
+/* My watchlist (Schedule tab) */
+.box-head { display: flex; justify-content: space-between; align-items: baseline; gap: 6px 12px; flex-wrap: wrap; }
+.box-head small { color: var(--muted); font-size: 13px; }
+.wl-add { max-width: 440px; }
+.wl-list { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 230px), 1fr)); gap: 8px; }
+.wl-item { display: grid; grid-template-columns: 40px minmax(0, 1fr) auto; gap: 10px; align-items: center; padding: 6px; border-radius: 6px; background: var(--sunk); }
+.wl-item .thumb { width: 40px; aspect-ratio: 2 / 3; object-fit: cover; border-radius: 3px; background: var(--bg); display: block; }
+.wl-item b { display: block; font-weight: 600; overflow-wrap: anywhere; line-height: 1.25; }
+.wl-item small { color: var(--muted); font-size: 12px; }
+.wl-remove { font: inherit; font-size: 18px; line-height: 1; width: 28px; height: 28px; border-radius: 50%; border: 0; background: none; color: var(--muted); cursor: pointer; }
+.wl-remove:hover, .wl-remove:focus-visible { color: var(--danger); background: var(--bg); }
 .or-line { display: flex; align-items: center; gap: 10px; color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spacing: .1em; font-weight: 700; font-stretch: 75%; }
 .or-line::before, .or-line::after { content: ""; flex: 1; height: 1px; background: var(--line); }
 .row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
@@ -623,6 +637,17 @@ footer .version { display: block; margin-top: 6px; font-family: var(--font-data)
         <ul class="schedule" id="schedule"></ul>
         <button class="btn" id="sched-toggle" type="button" style="justify-self:start"></button>
       </section>
+      <div class="box" id="watchlist-box" hidden>
+        <div class="box-head"><h3>My watchlist</h3><small>Only you can see this</small></div>
+        <div class="field wl-add" id="wl-add">
+          <label for="wl-search">Add a film</label>
+          <input id="wl-search" type="search" autocomplete="off" placeholder="Type a title">
+          <span class="help" id="wl-help" hidden></span>
+          <ul class="search-results" id="wl-results"></ul>
+        </div>
+        <ul class="wl-list" id="wl-list"></ul>
+        <p id="wl-empty">Nothing here yet. Add films you'd like to pick someday, then choose one when it's your turn.</p>
+      </div>
       <div class="box">
         <h3>Pick order</h3>
         <ol class="order" id="order"></ol>
@@ -682,7 +707,7 @@ footer .version { display: block; margin-top: 6px; font-family: var(--font-data)
     </div>
   </div>
 
-  <footer>Anyone with the link can look. Log in to rate, review and pick. Film data and posters from TMDB. This product uses the TMDB API but is not endorsed or certified by TMDB.<span class="version" id="version">v65 · Oct 12, 2026 7:44 AM</span></footer>
+  <footer>Anyone with the link can look. Log in to rate, review and pick. Film data and posters from TMDB. This product uses the TMDB API but is not endorsed or certified by TMDB.<span class="version" id="version">v66 · Oct 12, 2026 8:00 AM</span></footer>
 </main>
 
 <dialog id="login" class="narrow" aria-labelledby="login-h">
@@ -787,6 +812,10 @@ footer .version { display: block; margin-top: 6px; font-family: var(--font-data)
   <form id="editor-form" novalidate>
     <h3 id="editor-h">Edit screening</h3>
     <p class="muted" id="editor-when" style="margin:0"></p>
+    <div class="field" id="wl-field" hidden>
+      <span class="label">From your watchlist</span>
+      <ul class="search-results" id="wl-pick"></ul>
+    </div>
     <div class="field" id="search-field">
       <label for="f-search">Search for a film</label>
       <input id="f-search" type="search" autocomplete="off" placeholder="Type a title">
@@ -912,6 +941,8 @@ let canReview = false, canPoster = false; // database has the review / poster co
 let canMiss = false;                  // database has the absences table
 let canParty = false;                 // database has the stickers table
 let canVote = false;                  // database has the review_votes table
+let watchlist = [];                   // your own watchlist, newest first (private to you)
+let canWatchlist = false;             // database has the watchlist table
 let votes = new Map();                // "slot|author" -> {up, down, mine}
 let takesSort = "newest";             // newest | top
 let stickers = [];                    // [{id, path, tab, x, y, w, z, added_by}]
@@ -958,10 +989,17 @@ async function load() {
   });
   slots = [...byDate.values()];
 }
+// Your watchlist. Row-level security only ever returns your own rows.
+async function loadWatchlist() {
+  if (!me) { watchlist = []; return; }
+  const { data, error } = await sb.from("watchlist").select("*").order("added_at", { ascending: false });
+  canWatchlist = !error;
+  watchlist = data || [];
+}
 let reloadTimer;
 function scheduleReload() {
   clearTimeout(reloadTimer);
-  reloadTimer = setTimeout(() => load().then(render).catch(() => {}), 250);
+  reloadTimer = setTimeout(() => load().then(loadWatchlist).then(render).catch(() => {}), 250);
 }
 
 // Run a write, then refresh. Explains refusals in plain words.
@@ -1048,7 +1086,7 @@ function render() {
   $("status").hidden = true; $("content").hidden = false;
   const D = derive();
   renderTagline(D); renderTurn(D); renderTicket(D); renderTakes(D);
-  renderSchedule(D); renderOrder(D); renderWatched(D); renderGrid(D); renderMembers(D);
+  renderSchedule(D); renderWatchlist(); renderOrder(D); renderWatched(D); renderGrid(D); renderMembers(D);
   renderParty();
 
   if (popFor && !popFor.isConnected) hidePop();
@@ -2202,6 +2240,7 @@ async function setSession(s) {
     const { data } = await sb.from("members").select("name").eq("user_id", s.user.id).maybeSingle();
     me = data ? data.name : null;
   }
+  await loadWatchlist();
   render();
   if (me) backfillPosters();
 }
@@ -2249,8 +2288,65 @@ async function backfillPosters() {
   if (changed) scheduleReload();
 }
 
+/* ---------- my watchlist ---------- */
+const wlThumb = src => src ? `<img class="thumb" src="${esc(src)}" alt="" loading="lazy">` : `<span class="thumb"></span>`;
+function renderWatchlist() {
+  const box = $("watchlist-box");
+  box.hidden = !me || !canWatchlist;
+  if (box.hidden) return;
+  $("wl-add").hidden = !TMDB_KEY;
+  $("wl-empty").hidden = watchlist.length > 0;
+  $("wl-list").innerHTML = watchlist.map(w => `
+    <li class="wl-item">${wlThumb(w.poster)}
+      <span><b>${esc(w.title)}</b>${w.year ? `<small>${esc(w.year)}</small>` : ""}</span>
+      <button class="wl-remove" type="button" data-wl-remove="${w.id}" aria-label="Remove ${esc(w.title)} from your watchlist" title="Remove">×</button>
+    </li>`).join("");
+}
+// Title search for adding, debounced; the newest search wins.
+let wlTimer, wlSeq = 0;
+function wlHelp(msg) { $("wl-help").textContent = msg; $("wl-help").hidden = !msg; }
+$("wl-search").addEventListener("input", () => {
+  clearTimeout(wlTimer);
+  const q = $("wl-search").value.trim();
+  if (q.length < 2) { $("wl-results").innerHTML = ""; wlHelp(""); return; }
+  wlTimer = setTimeout(async () => {
+    const seq = ++wlSeq;
+    wlHelp("Searching…");
+    let found;
+    try { found = (await tmdbSearch(q)).slice(0, 6); }
+    catch (e) { if (seq === wlSeq) wlHelp("Film search isn't responding right now. Try again in a moment."); return; }
+    if (seq !== wlSeq) return;
+    wlHelp(found.length ? "" : `No films found for "${q}". Try a shorter title.`);
+    $("wl-results").innerHTML = found.map(r => {
+      const on = watchlist.some(w => w.tmdb_id === r.tmdbId);
+      return `<li><button type="button" data-wl-add="${r.tmdbId}" data-title="${esc(r.title)}" data-year="${esc(r.year)}" data-thumb="${esc(r.thumb || "")}"${on ? " disabled" : ""}>
+        ${wlThumb(r.thumb)}
+        <span><b>${esc(r.title)}</b><small>${[r.year, on ? "Already on your list" : ""].filter(Boolean).map(esc).join(" · ")}</small></span>
+      </button></li>`;
+    }).join("");
+  }, 300);
+});
+$("wl-search").addEventListener("keydown", e => {
+  if (e.key === "Enter") { e.preventDefault(); $("wl-results").querySelector("button:not(:disabled)")?.click(); }
+});
+$("wl-results").addEventListener("click", async e => {
+  const b = e.target.closest("[data-wl-add]"); if (!b) return;
+  $("wl-results").innerHTML = ""; $("wl-search").value = ""; wlHelp("");
+  const row = { member: me, tmdb_id: +b.dataset.wlAdd, title: b.dataset.title, year: b.dataset.year || null, poster: b.dataset.thumb || null };
+  await write(() => sb.from("watchlist").insert(row), `Added ${row.title} to your watchlist`);
+  $("wl-search").focus();
+});
+$("wl-list").addEventListener("click", async e => {
+  const b = e.target.closest("[data-wl-remove]"); if (!b) return;
+  const w = watchlist.find(x => x.id === +b.dataset.wlRemove); if (!w) return;
+  const { member, tmdb_id, title, year, poster } = w;
+  if (await write(() => sb.from("watchlist").delete().eq("id", w.id)))
+    toast(`Removed ${title}`, { label: "Undo", run: () => write(() => sb.from("watchlist").insert({ member, tmdb_id, title, year, poster })) });
+});
+
 /* ---------- editor ---------- */
 let editing = null, editorPoster;
+let pickedWl = null; // watchlist entry chosen in the editor; it comes off the list on save
 const dlg = $("editor");
 function openEditor(slot) {
   editing = slot;
@@ -2273,6 +2369,8 @@ function openEditor(slot) {
   $("f-search").value = "";
   $("search-results").innerHTML = "";
   $("search-help").textContent = "Pick a result and everything below fills in.";
+  pickedWl = null;
+  renderWlPick();
   openDialog(dlg);
   $("f-search").focus();
 }
@@ -2356,6 +2454,28 @@ $("poster-grid").addEventListener("click", e => {
   $("poster-help").textContent = "Poster chosen. Save to keep it.";
 });
 
+// Your watchlist in the editor, for upcoming screenings.
+function renderWlPick() {
+  const show = !!(me && canWatchlist && watchlist.length && TMDB_KEY && editing && !editing.watched);
+  $("wl-field").hidden = !show;
+  $("wl-pick").innerHTML = show ? watchlist.map(w => `
+    <li><button type="button" data-wl-pick="${w.id}" aria-pressed="${pickedWl === w.id}">
+      ${wlThumb(w.poster)}
+      <span><b>${esc(w.title)}</b>${w.year ? `<small>${esc(w.year)}</small>` : ""}</span>
+    </button></li>`).join("") : "";
+}
+$("wl-pick").addEventListener("click", async e => {
+  const b = e.target.closest("[data-wl-pick]"); if (!b) return;
+  const w = watchlist.find(x => x.id === +b.dataset.wlPick); if (!w) return;
+  pickedWl = w.id;
+  renderWlPick();
+  $("imdb-help").textContent = "Looking up the film…";
+  try {
+    fillForm(await tmdbDetails(w.tmdb_id), true);
+    $("imdb-help").textContent += " It comes off your watchlist when you save.";
+  } catch (err) { $("imdb-help").textContent = "Couldn't load that film's details right now. Try again, or fill them in below."; }
+});
+
 function fillForm(f, fresh) {
   const set = (el, v) => { if (v && (fresh || !$(el).value.trim())) $(el).value = v; };
   set("f-title", f.title); set("f-director", f.director); set("f-genre", f.genre);
@@ -2399,6 +2519,7 @@ $("f-search").addEventListener("input", () => {
 });
 $("search-results").addEventListener("click", async e => {
   const b = e.target.closest("[data-pick]"); if (!b) return;
+  pickedWl = null; renderWlPick();
   $("search-results").innerHTML = "";
   $("f-search").value = "";
   $("search-help").textContent = "Pick a result and everything below fills in.";
@@ -2448,8 +2569,11 @@ $("editor-form").addEventListener("submit", e => {
     else if (editorPoster !== undefined) data.poster = editorPoster;
     else if (imdb !== editing.imdb) data.poster = null; // backfill picks it up later
   }
+  // Saving a film chosen from your watchlist takes it off the list.
+  const wl = watchlist.find(w => w.id === pickedWl && title && w.title.toLowerCase() === title.toLowerCase());
   closeDialog(dlg);
-  write(() => sb.from("slots").update(data).eq("date", date), "Saved");
+  write(() => sb.from("slots").update(data).eq("date", date), wl ? `Saved. ${wl.title} came off your watchlist.` : "Saved")
+    .then(ok => { if (ok && wl) sb.from("watchlist").delete().eq("id", wl.id).then(scheduleReload); });
 });
 $("editor-clear").addEventListener("click", () => {
   if (!editing) return;
