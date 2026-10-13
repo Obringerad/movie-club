@@ -135,6 +135,10 @@ section { display: grid; gap: 16px; min-width: 0; }
 .account .me { font-weight: 700; }
 
 /* Your turn */
+/* "We've moved" notice pointing everyone to the new site. */
+.moved { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px 16px; padding: 14px 18px; border-radius: 8px; background: var(--surface); border: 2px solid var(--accent); }
+.moved p { margin: 0; max-width: 62ch; }
+.moved strong { color: var(--display); }
 .turn { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; padding: 12px 16px; border-radius: 8px; background: var(--sunk); border: 1px solid var(--line); }
 .turn .label { color: var(--display); }
 .turn .item { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 6px; }
@@ -576,6 +580,11 @@ footer .version { display: block; margin-top: 6px; font-family: var(--font-data)
     <div class="tagline" id="tagline"></div>
   </header>
 
+  <aside class="moved" aria-label="The club has moved">
+    <p><strong>We've moved to movieclub.bravepop.app.</strong> Open the link, sign in with Google and pick your name. All your ratings and reviews come with you. Watchlists didn't move, so re-add those films there.</p>
+    <a class="btn primary" href="https://movieclub.bravepop.app/?join=a6912b47a8dd">Go to the new site</a>
+  </aside>
+
   <div class="turn" id="turn" hidden></div>
 
   <nav class="tabs" role="tablist" aria-label="Sections" id="tabs">
@@ -707,7 +716,7 @@ footer .version { display: block; margin-top: 6px; font-family: var(--font-data)
     </div>
   </div>
 
-  <footer>Anyone with the link can look. Log in to rate, review and pick. Film data and posters from TMDB. This product uses the TMDB API but is not endorsed or certified by TMDB.<span class="version" id="version">v66 · Oct 12, 2026 8:00 AM</span></footer>
+  <footer>Anyone with the link can look. Log in to rate, review and pick. Film data and posters from TMDB. This product uses the TMDB API but is not endorsed or certified by TMDB.<span class="version" id="version">v67 · Oct 13, 2026 11:58 AM</span></footer>
 </main>
 
 <dialog id="login" class="narrow" aria-labelledby="login-h">
